@@ -1,0 +1,426 @@
+import SwiftUI
+import AppKit
+import PhotoVaultSetup
+
+/// The installer's state: which kind of setup, what's been chosen for it, and
+/// how it's going.
+@MainActor
+final class InstallerModel: ObservableObject {
+    enum Mode: Hashable { case create, install }
+
+    enum Phase: Equatable {
+        case choosing
+        case working
+        case done(SetupReport)
+        case failed(title: String, message: String)
+    }
+
+    struct Step: Identifiable, Equatable {
+        enum Status { case waiting, active, done }
+        let step: SetupStep
+        var status: Status = .waiting
+        var id: SetupStep { step }
+    }
+
+    /// One line about a vault, and how much it matters.
+    struct Fact: Hashable {
+        enum Kind { case fine, note, warning }
+        let kind: Kind
+        let text: String
+    }
+
+    let payload: Payload?
+    let version: String
+    let joyTagBytes: Int64
+    let joyTagVersion: String
+    /// For the snapshot renderer: nothing is looked up, chosen or changed.
+    let isPreview: Bool
+
+    @Published var mode: Mode = .create
+    @Published var phase: Phase = .choosing
+
+    // A new vault
+    @Published var name = "PhotoVault"
+    @Published var folder = FileManager.default.homeDirectoryForCurrentUser
+    @Published var size = VaultSetup.defaultSize
+
+    // An existing vault
+    @Published var vaults: [ExistingVault] = []
+    @Published var chosenMount: URL?
+    /// The name of a vault being opened.
+    @Published var opening: String?
+    @Published var chooseProblem: String?
+
+    // Working
+    @Published var workTitle = ""
+    @Published var steps: [Step] = []
+
+    private var observers: [NSObjectProtocol] = []
+    /// Vaults chosen by hand that aren't on a disk image — a vault folder —
+    /// kept in the list across refreshes.
+    private var chosenByHand: [URL] = []
+
+    init() {
+        isPreview = false
+        let payload: Payload
+        do {
+            payload = try Payload.bundled()
+        } catch {
+            self.payload = nil
+            version = ""
+            joyTagBytes = 0
+            joyTagVersion = ""
+            phase = .failed(title: "This installer can't be used", message: error.localizedDescription)
+            return
+        }
+        self.payload = payload
+        version = payload.version
+        joyTagBytes = payload.joyTagBytes
+        joyTagVersion = payload.joyTagVersion
+
+        // Vaults opened or ejected while the installer is open.
+        let center = NSWorkspace.shared.notificationCenter
+        for note in [NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification] {
+            observers.append(center.addObserver(forName: note, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshVaults() }
+            })
+        }
+        refreshVaults()
+    }
+
+    init(preview payload: Payload) {
+        isPreview = true
+        self.payload = payload
+        version = payload.version
+        joyTagBytes = payload.joyTagBytes
+        joyTagVersion = payload.joyTagVersion
+    }
+
+    // MARK: - A new vault
+
+    var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
+
+    /// Why a vault can't be created with this name here, or nil.
+    var nameProblem: String? {
+        if let problem = VaultSetup.problem(withName: name) { return problem }
+        if FileManager.default.fileExists(atPath: VaultSetup.bundle(named: name, in: folder).path) {
+            return "There's already a vault called “\(trimmedName)” here."
+        }
+        return nil
+    }
+
+    /// iCloud Drive would upload every photo put in the vault.
+    var folderIsInICloud: Bool {
+        (try? folder.resourceValues(forKeys: [.isUbiquitousItemKey]))?.isUbiquitousItem == true
+            || folder.path.contains("/Library/Mobile Documents/")
+    }
+
+    /// Where the folder is, for the line under its name.
+    var folderDescription: String { Self.place(folder) }
+
+    var freeSpace: String? {
+        guard let free = (try? folder.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
+            .volumeAvailableCapacityForImportantUsage else { return nil }
+        return "\(Self.bytes(free)) available"
+    }
+
+    func chooseFolder() {
+        guard !isPreview else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = folder
+        panel.prompt = "Choose"
+        panel.message = "Choose where to save the new vault's disk image."
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            MainActor.assumeIsolated { self?.folder = url }
+        }
+    }
+
+    // MARK: - An existing vault
+
+    var chosen: ExistingVault? { vaults.first { $0.mountPoint == chosenMount } }
+
+    /// What installing on `vault` does, in lines.
+    func facts(for vault: ExistingVault) -> [Fact] {
+        var facts: [Fact] = []
+        if let installed = vault.installedVersion {
+            switch VaultSetup.compare(installed, version) {
+            case -1: facts.append(Fact(kind: .fine, text: "PhotoVault \(installed) is on it, and is updated to \(version)."))
+            case 0: facts.append(Fact(kind: .fine, text: "PhotoVault \(version) is on it already. A fresh copy goes in its place."))
+            default: facts.append(Fact(kind: .warning, text: "It has a newer PhotoVault, \(installed). Installing puts the older \(version) in its place."))
+            }
+        } else {
+            facts.append(Fact(kind: .fine, text: "PhotoVault isn't on it yet."))
+        }
+        facts.append(Fact(kind: .fine, text: vault.hasCatalog ? "Its photos, albums and tags stay as they are." : "Its photos stay as they are."))
+        switch vault.joyTagVersion {
+        case nil: facts.append(Fact(kind: .fine, text: "JoyTag is added, to tag its photos automatically (\(Self.bytes(joyTagBytes)))."))
+        case joyTagVersion?: facts.append(Fact(kind: .fine, text: "JoyTag, which tags its photos automatically, is on it already."))
+        case let other?: facts.append(Fact(kind: .fine, text: "JoyTag \(other) is replaced with \(joyTagVersion) (\(Self.bytes(joyTagBytes)))."))
+        }
+        if vault.photoVaultIsOpen {
+            facts.append(Fact(kind: .note, text: "PhotoVault is open from it. The installer quits it first; a scan or tagging run carries on when it's next opened."))
+        }
+        return facts
+    }
+
+    /// Where a vault is, for the line under its name.
+    func location(of vault: ExistingVault) -> String {
+        Self.abbreviated(vault.image ?? vault.mountPoint)
+    }
+
+    func chooseVault() {
+        guard !isPreview else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = false
+        panel.treatsFilePackagesAsDirectories = false
+        panel.directoryURL = chosen?.image?.deletingLastPathComponent() ?? FileManager.default.homeDirectoryForCurrentUser
+        panel.prompt = "Choose"
+        panel.message = "Choose a vault's disk image (.sparsebundle), or the vault itself if it's open."
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            MainActor.assumeIsolated { self?.choose(url) }
+        }
+    }
+
+    /// A vault chosen in the panel or dropped on the window: its disk image
+    /// is opened, to see what's on it.
+    func choose(_ url: URL) {
+        guard !isPreview, opening == nil, phase == .choosing else { return }
+        mode = .install
+        chooseProblem = nil
+        opening = DiskImages.isDiskImage(url) ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try VaultSetup.open(url).vault }
+            DispatchQueue.main.async {
+                self.opening = nil
+                switch result {
+                case .success(let vault):
+                    if vault.image == nil, !self.chosenByHand.contains(vault.mountPoint) { self.chosenByHand.append(vault.mountPoint) }
+                    self.show(self.vaults.filter { $0.mountPoint != vault.mountPoint } + [vault])
+                    self.chosenMount = vault.mountPoint
+                case .failure(let error):
+                    self.chooseProblem = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    /// Looks again for vaults on mounted disk images.
+    func refreshVaults() {
+        guard !isPreview else { return }
+        let byHand = chosenByHand
+        DispatchQueue.global(qos: .userInitiated).async {
+            var found = VaultSetup.mountedVaults()
+            for mount in byHand where !found.contains(where: { $0.mountPoint == mount }) {
+                if let vault = try? VaultSetup.inspect(mount) { found.append(vault) }
+            }
+            DispatchQueue.main.async { self.show(found) }
+        }
+    }
+
+    private func show(_ found: [ExistingVault]) {
+        var list = found
+        // One just opened may not be in hdiutil's list yet.
+        if let current = chosen, !list.contains(where: { $0.mountPoint == current.mountPoint }),
+           FileManager.default.fileExists(atPath: current.mountPoint.path) {
+            list.append(current)
+        }
+        vaults = list.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        if chosen == nil { chosenMount = vaults.first?.mountPoint }
+    }
+
+    // MARK: - Either
+
+    /// JoyTag's model runs on macOS 15 and later. A vault set up on an older
+    /// Mac can still carry it, for when it's opened on a newer one.
+    var joyTagRunsHere: Bool {
+        ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0))
+    }
+
+    var canStart: Bool {
+        guard payload != nil, phase == .choosing, opening == nil else { return false }
+        switch mode {
+        case .create: return nameProblem == nil
+        case .install: return chosen != nil
+        }
+    }
+
+    var startLabel: String {
+        switch mode {
+        case .create: return "Create Vault"
+        case .install:
+            guard let installed = chosen?.installedVersion else { return "Install" }
+            switch VaultSetup.compare(installed, version) {
+            case -1: return "Update"
+            case 0: return "Reinstall"
+            default: return "Install Older Version"
+            }
+        }
+    }
+
+    func start() {
+        guard canStart, let payload else { return }
+        var plan: [SetupStep]
+        let failure: String
+        let work: ((SetupStep) -> Void) throws -> SetupReport
+        switch mode {
+        case .create:
+            let (name, folder, size) = (trimmedName, folder, size)
+            workTitle = "Creating “\(name)”"
+            failure = "The vault couldn't be created"
+            plan = [.creating, .opening, .installingApp]
+            work = { progress in
+                try VaultSetup.create(name: name, in: folder, size: size, payload: payload, progress: progress)
+            }
+        case .install:
+            guard let vault = chosen else { return }
+            // Looked at again: PhotoVault may have been opened or quit since.
+            let now = (try? VaultSetup.inspect(vault.mountPoint, image: vault.image)) ?? vault
+            let target = vault.image ?? vault.mountPoint
+            workTitle = "Installing PhotoVault on “\(now.name)”"
+            failure = "PhotoVault couldn't be installed"
+            plan = (now.photoVaultIsOpen ? [.quitting] : []) + [.installingApp]
+            work = { progress in
+                try VaultSetup.install(into: target, payload: payload, progress: progress)
+            }
+        }
+        plan += [.installingJoyTag, .checking]
+        steps = plan.map { Step(step: $0) }
+        phase = .working
+        setCloseButtonEnabled(false)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try work { step in DispatchQueue.main.async { self.advance(to: step) } } }
+            DispatchQueue.main.async { self.finish(result, failure: failure) }
+        }
+    }
+
+    private func advance(to step: SetupStep) {
+        if !steps.contains(where: { $0.step == step }) {
+            // Not foreseen: the vault was ejected meanwhile, and is opened again.
+            let order = SetupStep.allCases
+            let rank = { (s: SetupStep) in order.firstIndex(of: s) ?? 0 }
+            steps.insert(Step(step: step), at: steps.firstIndex { rank($0.step) > rank(step) } ?? steps.endIndex)
+        }
+        guard let index = steps.firstIndex(where: { $0.step == step }) else { return }
+        for i in steps.indices { steps[i].status = i < index ? .done : i == index ? .active : .waiting }
+    }
+
+    private func finish(_ result: Result<SetupReport, Error>, failure: String) {
+        setCloseButtonEnabled(true)
+        switch result {
+        case .success(let report):
+            for i in steps.indices { steps[i].status = .done }
+            phase = .done(report)
+        case .failure(let error):
+            phase = .failed(title: failure, message: error.localizedDescription)
+        }
+        refreshVaults()
+    }
+
+    func back() {
+        phase = .choosing
+        refreshVaults()
+    }
+
+    private func setCloseButtonEnabled(_ enabled: Bool) {
+        for window in NSApp.windows { window.standardWindowButton(.closeButton)?.isEnabled = enabled }
+    }
+
+    // MARK: - Done
+
+    func doneTitle(_ report: SetupReport) -> String {
+        if report.createdImage != nil { return "“\(report.mountPoint.lastPathComponent)” is ready" }
+        return "PhotoVault \(report.version) is on “\(report.mountPoint.lastPathComponent)”"
+    }
+
+    /// What was done, in sentences.
+    func doneLines(_ report: SetupReport) -> [String] {
+        var lines: [String] = []
+        if let image = report.createdImage {
+            lines.append("It's open in Finder as a disk called “\(report.mountPoint.lastPathComponent)”. The disk image it lives in is “\(image.lastPathComponent)”, in \(Self.place(image.deletingLastPathComponent()).lowercasedFirst).")
+            return lines
+        }
+        switch report.replacedVersion {
+        case nil: break
+        case report.version?: lines.append("A fresh copy replaced the one that was there.")
+        case let old?: lines.append("It replaced PhotoVault \(old).")
+        }
+        switch report.joyTag {
+        case .installed(let v): lines.append("JoyTag \(v) is on it, to tag its photos automatically.")
+        case .alreadyThere: lines.append("JoyTag was there already.")
+        }
+        if report.tagGroups == .renamed {
+            lines.append("Its Tag Groups.txt is hidden now, as .Tag Groups.txt. To edit it, show hidden files in Finder: press ⇧⌘ and the full stop key.")
+        }
+        if report.quitPhotoVault { lines.append("PhotoVault was quit to install. Open it again to carry on.") }
+        lines.append("Its photos, albums and tags are as they were.")
+        return lines
+    }
+
+    /// What to do next with a new vault.
+    let nextSteps = [
+        "Copy your photos and videos into its Photos folder.",
+        "Open PhotoVault from the disk. It finds the photos and makes their thumbnails.",
+        "When you're done, eject the disk from inside PhotoVault, with ⌘E.",
+    ]
+
+    func showInFinder() {
+        guard case .done(let report) = phase else { return }
+        let target = report.createdImage != nil ? "Photos" : "PhotoVault.app"
+        NSWorkspace.shared.activateFileViewerSelecting([report.mountPoint.appendingPathComponent(target)])
+    }
+
+    func openPhotoVault() {
+        guard case .done(let report) = phase else { return }
+        let app = report.mountPoint.appendingPathComponent("PhotoVault.app")
+        NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration()) { _, error in
+            DispatchQueue.main.async {
+                guard let error else { NSApp.terminate(nil); return }
+                let alert = NSAlert()
+                alert.messageText = "PhotoVault didn't open"
+                alert.informativeText = error.localizedDescription
+                alert.runModal()
+            }
+        }
+    }
+
+    // MARK: - Wording
+
+    /// Sizes as Finder gives them, in powers of 1000, without decimals that
+    /// don't help: 369 MB, 4.2 GB, 221 GB.
+    static func bytes(_ count: Int64) -> String {
+        let units = ["bytes", "KB", "MB", "GB", "TB", "PB"]
+        var value = Double(count), unit = 0
+        while value >= 1000, unit < units.count - 1 {
+            value /= 1000
+            unit += 1
+        }
+        if unit == 0 { return "\(count) bytes" }
+        return value < 10 ? String(format: "%.1f %@", value, units[unit]) : "\(Int(value.rounded())) \(units[unit])"
+    }
+
+    static func abbreviated(_ url: URL) -> String {
+        (url.path as NSString).abbreviatingWithTildeInPath
+    }
+
+    /// A folder, in words: “Your home folder”, or its path from there.
+    static func place(_ url: URL) -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return url.standardizedFileURL.path == home.standardizedFileURL.path ? "Your home folder" : abbreviated(url)
+    }
+}
+
+private extension String {
+    /// “Your home folder” in the middle of a sentence; a path as it is.
+    var lowercasedFirst: String {
+        guard let first, first.isUppercase else { return self }
+        return first.lowercased() + dropFirst()
+    }
+}

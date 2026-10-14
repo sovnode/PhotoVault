@@ -1,0 +1,30 @@
+# Build output — always reproducible from source
+.build/
+build/
+
+# Saved app builds. Kept on disk, recorded in history by tag and checksum, but
+# not stored in it: binaries bloat a repository with every release.
+releases/
+
+# Vaults hold photos. Never commit them.
+vaults/
+*.sparsebundle
+*.sparseimage
+*.dmg
+
+# Smoke-test scratch space
+.smoke/
+
+# macOS and Xcode per-user files
+.DS_Store
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+
+# JoyTag: downloaded model, Python environments, reports.
+# Large and reproducible with Scripts/joytag/fetch.sh — and the reports hold
+# tags derived from vault photos.
+tools/joytag/
+
+# Python bytecode
+__pycache__/

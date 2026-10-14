@@ -1,0 +1,20 @@
+#!/bin/sh
+# Runs the unit tests before any commit that touches code — the local
+# equivalent of a required CI check. Commits that only change docs, scripts or
+# resources skip it. The full suite, including the end-to-end smoke test, is
+# Scripts/check.sh; release.sh always runs it.
+#
+# Bypass in an emergency: git commit --no-verify
+
+if git diff --cached --name-only | grep -Eq '^(Sources/|Tests/|Package\.swift)'; then
+    LOG="$(git rev-parse --git-dir)/last-test-run.log"
+    echo "pre-commit: code changed — running unit tests"
+    if Scripts/test.sh >"$LOG" 2>&1; then
+        grep -E "Test run with" "$LOG"
+    else
+        echo "pre-commit: tests FAILED — commit stopped. Last lines:"
+        tail -25 "$LOG"
+        echo "(full log: $LOG)"
+        exit 1
+    fi
+fi

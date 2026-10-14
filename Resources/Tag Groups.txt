@@ -1,0 +1,5899 @@
+# PhotoVault tag groups
+#
+# Which group each tag is listed under when you set up a smart album's tag
+# filter. PhotoVault reads this file each time it opens, so changing it never
+# needs a new version of the app. Edit it in any text editor.
+#
+#   [Group name]   starts a group. Groups appear in the filter in this order,
+#                  each as a list you can open and close.
+#   a tag          one per line, listed under the group above it.
+#   # ...          a comment. Blank lines are ignored.
+#
+# Write tags the way PhotoVault shows them, without a "jt:" or other prefix.
+# Capitals don't matter, and a space and an underscore count as the same, so
+# "blonde hair" also matches JoyTag's "blonde_hair". A tag goes in the group its
+# name is listed under whichever tool wrote it, so your own keywords can be
+# grouped here too. A tag listed in two groups shows in both. A tag listed
+# nowhere shows under "Other".
+#
+# Groups are PhotoVault's own, and so are JoyTag's tags: both are kept in
+# PhotoVault's catalog, and nothing is ever written into your photos.
+#
+# R18 holds nude and explicit content only: nudity, sex, sexual fluids and
+# toys, bondage, and graphic gore. JoyTag misreads some photos, so innocent
+# photos can land in R18 too. Anime and games holds character, series, game
+# and artist names; Fantasy and sci-fi holds magic, monsters, robots, and
+# non-human features such as animal ears and wings.
+#
+# This first version sorts every one of JoyTag's 5,813 tags.
+
+[People]
+1boy
+1girl
+1other
+2boys
+2girls
+2others
+3boys
+3girls
+4boys
+4girls
+5boys
+5girls
+6+boys
+6+girls
+age difference
+ambiguous gender
+androgynous
+assertive female
+baby
+brother and sister
+brothers
+child
+column lineup
+couple
+cousins
+crowd
+dancer
+family
+father and daughter
+father and son
+height difference
+hetero
+husband and wife
+interracial
+lineup
+male focus
+manly
+mature female
+mature male
+mother and daughter
+mother and son
+multiple boys
+multiple girls
+multiple others
+ninja
+no humans
+office lady
+old
+old man
+old woman
+police
+princess
+samurai
+siblings
+sisters
+size difference
+solo
+solo focus
+teacher
+tomboy
+twins
+wife and wife
+yaoi
+yuri
+
+[Faces]
++++
++_+
+0_0
+3:
+:/
+:3
+:<
+:>
+:>=
+:d
+:i
+:o
+:p
+:q
+:t
+:x
+:|
+;)
+;3
+;d
+;o
+;p
+;q
+=3
+=_=
+>:(
+>:)
+>_<
+>_o
+@_@
+^^^
+^_^
+angry
+annoyed
+aqua eyes
+bags under eyes
+beard
+black eyes
+black lips
+blue eyes
+blue lips
+blush
+brown eyes
+chestnut mouth
+clenched teeth
+closed eyes
+closed mouth
+colored eyelashes
+covered eyes
+covered mouth
+crying
+crying with eyes open
+d:
+doyagao
+drooling
+drunk
+embarrassed
+evil grin
+evil smile
+expressionless
+eye contact
+eyelashes
+eyeliner
+eyeshadow
+facepaint
+facial hair
+false smile
+forehead
+forked eyebrows
+freckles
+frown
+full-face blush
+furrowed brow
+glaring
+gloom (expression)
+goatee
+green eyes
+green lips
+grey eyes
+grimace
+grin
+half-closed eye
+half-closed eyes
+happy
+happy tears
+heavy breathing
+heterochromia
+in the face
+jealous
+jitome
+laughing
+licking lips
+light blue eyes
+light blush
+light brown eyes
+light frown
+light purple eyes
+light smile
+lip biting
+lips
+lipstick
+long sideburns
+long tongue
+looking afar
+looking ahead
+looking at another
+looking at viewer
+looking back
+looking down
+looking to the side
+looking up
+lower teeth
+makeup
+mascara
+mole
+mole under eye
+mole under mouth
+mouth drool
+mustache
+naughty face
+nervous
+nervous smile
+nose
+o3o
+o_o
+one eye closed
+one eye covered
+open mouth
+orange eyes
+parted lips
+pink eyes
+pink lips
+pout
+puckered lips
+purple eyes
+purple lips
+raised eyebrow
+raised eyebrows
+red eyes
+red eyeshadow
+red lips
+rolling eyes
+sad
+saliva
+saliva trail
+sanpaku
+scared
+scowl
+screaming
+seductive smile
+serious
+sharp teeth
+short eyebrows
+shouting
+shy
+sideburns
+sideways glance
+sideways mouth
+sigh
+sleepy
+smile
+smirk
+smug
+snot
+staring
+streaming tears
+stubble
+surprised
+tareme
+teardrop
+tearing up
+tears
+teeth
+thick eyebrows
+thinking
+tongue
+tongue out
+triangle mouth
+tsurime
+turn pale
+upper teeth
+v-shaped eyebrows
+wide-eyed
+wince
+x_x
+xd
+yellow eyes
+|_|
+
+[Hair]
+absurdly long hair
+adjusting hair
+afro
+ahoge
+anchor hair ornament
+antenna hair
+aqua hair
+asymmetrical bangs
+asymmetrical hair
+bald
+bangs
+bangs pinned back
+bat hair ornament
+big hair
+black hair
+black hairband
+black scrunchie
+blonde hair
+blue hair
+blue hairband
+blue scrunchie
+blunt bangs
+blunt ends
+bob cut
+bone hair ornament
+bow hairband
+braid
+braided bangs
+braided bun
+braided ponytail
+brown hair
+bun cover
+bunny hair ornament
+butterfly hair ornament
+carrot hair ornament
+cat hair ornament
+colored inner hair
+crescent hair ornament
+crossed bangs
+crown braid
+curly hair
+d-pad hair ornament
+dark blue hair
+double bun
+drill hair
+dyed bangs
+feather hair ornament
+flipped hair
+floating hair
+folded ponytail
+food-themed hair ornament
+french braid
+frilled hairband
+frog hair ornament
+front ponytail
+gradient hair
+green hair
+green hairband
+grey hair
+hair beads
+hair behind ear
+hair bell
+hair bobbles
+hair bow
+hair brush
+hair bun
+hair cones
+hair down
+hair flaps
+hair flower
+hair in mouth
+hair intakes
+hair ornament
+hair over eyes
+hair over one eye
+hair over shoulder
+hair pulled back
+hair rings
+hair scrunchie
+hair slicked back
+hair spread out
+hair stick
+hair strand
+hair tie
+hair tie in mouth
+hair tubes
+hair tucking
+hair twirling
+hair up
+hairband
+hairclip
+hairlocs
+hairpin
+hairpods
+half updo
+hand in hair
+hands in hair
+heart ahoge
+heart hair ornament
+high ponytail
+hime cut
+holding hair
+huge ahoge
+kanzashi
+leaf hair ornament
+light blue hair
+light brown hair
+light green hair
+light purple hair
+lolita hairband
+long braid
+long hair
+low ponytail
+low twintails
+low-tied long hair
+medium hair
+messy hair
+mohawk
+monocle hair ornament
+multi-tied hair
+multicolored hair
+multiple hair bows
+musical note hair ornament
+one side up
+orange hair
+orange hairband
+orange scrunchie
+parted bangs
+pink hair
+pink hairband
+pink scrunchie
+playing with own hair
+pointy hair
+pompadour
+ponytail
+prehensile hair
+purple hair
+purple hairband
+red hair
+red hairband
+red scrunchie
+ringlets
+scrunchie
+shiny hair
+short hair
+short hair with long locks
+short ponytail
+short twintails
+side braid
+side braids
+side bun
+side ponytail
+sidelocks
+single braid
+single hair intake
+single sidelock
+skull hair ornament
+snake hair ornament
+snowflake hair ornament
+spiked hair
+split-color hair
+star hair ornament
+straight hair
+streaked hair
+swept bangs
+topknot
+twin braids
+twin drills
+twintails
+two side up
+two-tone hair
+tying hair
+undercut
+updo
+very long hair
+very short hair
+wavy hair
+wet hair
+white hair
+white hairband
+white scrunchie
+wide ponytail
+wrist scrunchie
+x hair ornament
+yellow hairband
+yellow scrunchie
+
+[Body]
+abs
+albino
+alternate breast size
+amputee
+aqua nails
+arm hair
+arm tattoo
+arm under breasts
+armpit crease
+armpit hair
+armpit peek
+armpits
+arms under breasts
+ass
+ass focus
+ass visible through thighs
+back
+backboob
+bandage on face
+bandage over one eye
+bandaged arm
+bandaged hand
+bandaged head
+bandaged leg
+bandages
+bandaid
+bandaid on cheek
+bandaid on face
+bandaid on knee
+bandaid on leg
+bandaid on nose
+bare arms
+bare back
+bare hips
+bare legs
+bare pectorals
+bare shoulders
+belly
+biceps
+big belly
+bikini tan
+black nails
+bleeding
+blood
+blood from mouth
+blood on clothes
+blood on face
+blood on hands
+blood splatter
+blood stain
+blue nails
+body hair
+bouncing breasts
+breast curtains
+breast envy
+breast hold
+breast lift
+breast press
+breast rest
+breast suppress
+breast tattoo
+breasts
+breasts apart
+breasts on head
+bruise
+burn scar
+bursting breasts
+chest hair
+chest tattoo
+cleavage
+collarbone
+covered abs
+covered collarbone
+covered navel
+covered nipples
+crotch
+curvy
+cuts
+dark skin
+dark-skinned female
+dark-skinned male
+deep skin
+dimples of venus
+dirty
+dirty face
+dripping
+ear piercing
+ears
+facial tattoo
+fat
+fat man
+feet
+feet up
+fingernails
+fingers
+flat ass
+flat chest
+foot focus
+framed breasts
+gigantic breasts
+green nails
+groin
+hairy
+hanging breasts
+heart tattoo
+hip bones
+hip focus
+hot
+huge ass
+huge breasts
+injury
+kneepits
+knees
+large breasts
+large pectorals
+left-handed
+leg hair
+leg tattoo
+legs
+lip piercing
+long fingernails
+long legs
+medium breasts
+midriff
+midriff peek
+mole on breast
+mole on thigh
+multicolored nails
+muscular
+muscular female
+muscular male
+nail polish
+nape
+narrow waist
+navel
+navel hair
+navel piercing
+neck
+necktie between breasts
+nose piercing
+number tattoo
+one-piece tan
+orange nails
+pale skin
+palms
+pectoral cleavage
+pectorals
+perky breasts
+petite
+piercing
+pink nails
+plantar flexion
+plump
+pregnant
+prosthesis
+prosthetic arm
+purple nails
+red nails
+ribs
+sagging breasts
+scar
+scar across eye
+scar on cheek
+scar on chest
+scar on face
+scar on nose
+scratches
+sharp fingernails
+shiny skin
+shoulder blades
+shoulder tattoo
+sideboob
+single bare shoulder
+skindentation
+skinny
+small breasts
+soles
+steaming body
+stitches
+stomach
+stomach tattoo
+sweat
+sweating profusely
+tan
+tanlines
+tattoo
+thick thighs
+thigh gap
+thighs
+toe scrunch
+toenail polish
+toenails
+toes
+toned
+toned male
+tongue piercing
+topless male
+unaligned breasts
+underboob
+veins
+very dark skin
+wet
+white nails
+white skin
+wide hips
+yellow nails
+
+[Clothing]
+adjusting clothes
+adjusting swimsuit
+aiguillette
+ainu clothes
+american flag bikini
+american flag dress
+animal costume
+apron
+aqua bikini
+aqua bow
+aqua dress
+aqua necktie
+aqua skirt
+arabian clothes
+aran sweater
+arm garter
+arm warmers
+armband
+armored dress
+ascot
+asymmetrical clothes
+asymmetrical gloves
+asymmetrical sleeves
+babydoll
+back bow
+back cutout
+backless dress
+backless outfit
+baggy pants
+bandeau
+baseball uniform
+belt
+belt buckle
+beltbra
+bike shorts
+bike shorts under skirt
+biker clothes
+bikini
+bikini bottom
+bikini skirt
+bikini top
+bikini under clothes
+black apron
+black ascot
+black belt
+black bikini
+black bodysuit
+black bow
+black bowtie
+black bra
+black camisole
+black cape
+black capelet
+black cardigan
+black cloak
+black coat
+black dress
+black gloves
+black hakama
+black hoodie
+black jacket
+black kimono
+black leotard
+black neckerchief
+black necktie
+black panties
+black pants
+black ribbon
+black sailor collar
+black scarf
+black serafuku
+black shirt
+black shorts
+black skirt
+black sleeves
+black suit
+black sweater
+black swimsuit
+black tank top
+black vest
+blazer
+bloomers
+blouse
+blue belt
+blue bikini
+blue blouse
+blue bodysuit
+blue bow
+blue bowtie
+blue bra
+blue buruma
+blue cape
+blue capelet
+blue cardigan
+blue coat
+blue dress
+blue gloves
+blue hakama
+blue hoodie
+blue jacket
+blue kimono
+blue leotard
+blue neckerchief
+blue necktie
+blue panties
+blue pants
+blue ribbon
+blue sailor collar
+blue scarf
+blue shirt
+blue shorts
+blue skirt
+blue sleeves
+blue sweater
+blue swimsuit
+blue vest
+bodystocking
+bodysuit
+bodysuit under clothes
+bomber jacket
+borrowed garments
+bow
+bow bikini
+bow bra
+bow panties
+bowtie
+boxers
+bra
+bra strap
+bra visible through clothes
+breast pocket
+bridal gauntlets
+briefs
+brown belt
+brown bow
+brown cardigan
+brown coat
+brown dress
+brown gloves
+brown jacket
+brown pants
+brown ribbon
+brown scarf
+brown shirt
+brown shorts
+brown skirt
+brown sweater
+brown vest
+bubble skirt
+buckle
+budget sarashi
+buruma
+business suit
+bustier
+butler
+button gap
+buttons
+camisole
+cape
+capelet
+capri pants
+cardigan
+casual
+casual one-piece swimsuit
+cat cutout
+cat ear panties
+cat lingerie
+center frills
+center opening
+chaps
+checkered clothes
+checkered kimono
+checkered necktie
+checkered scarf
+checkered skirt
+cheerleader
+chemise
+chest harness
+china dress
+chinese clothes
+cleavage cutout
+cloak
+clothes around waist
+clothes down
+clothes grab
+clothes pull
+clothing cutout
+coat
+coattails
+collared blouse
+collared dress
+collared jacket
+collared shirt
+competition school swimsuit
+competition swimsuit
+corset
+cosplay
+cosplay photo
+costume
+cowboy western
+crease
+criss-cross halter
+crop top
+crop top overhang
+cropped jacket
+cropped shirt
+cross-laced clothes
+crossdressing
+crotch plate
+crotch seam
+cuffs
+cutoffs
+denim
+denim shorts
+denim skirt
+detached collar
+detached sleeves
+diagonal-striped bow
+dirty clothes
+dolphin shorts
+double-breasted
+dougi
+drawstring
+dress
+dress bow
+dress pull
+dress shirt
+dress tug
+egyptian
+egyptian clothes
+elbow gloves
+elbow pads
+employee uniform
+epaulettes
+evening gown
+expressive clothes
+eyepatch bikini
+fake tail
+fashion
+feather trim
+feather-trimmed sleeves
+fingerless gloves
+fishnets
+formal
+frilled apron
+frilled bikini
+frilled bow
+frilled bra
+frilled collar
+frilled dress
+frilled gloves
+frilled kimono
+frilled panties
+frilled shirt
+frilled shirt collar
+frilled skirt
+frilled sleeves
+frills
+fringe trim
+front-tie bikini
+front-tie top
+fundoshi
+fur coat
+fur collar
+fur scarf
+fur trim
+fur-trimmed cape
+fur-trimmed capelet
+fur-trimmed coat
+fur-trimmed dress
+fur-trimmed gloves
+fur-trimmed jacket
+fur-trimmed sleeves
+furisode
+g-string
+gakuran
+garter belt
+garter straps
+garters
+gloves
+gold trim
+gothic
+gothic lolita
+gown
+green bikini
+green bow
+green bowtie
+green bra
+green coat
+green dress
+green gloves
+green jacket
+green kimono
+green leotard
+green necktie
+green panties
+green pants
+green ribbon
+green sailor collar
+green scarf
+green shirt
+green shorts
+green skirt
+green sweater
+green vest
+grey cardigan
+grey coat
+grey dress
+grey gloves
+grey hoodie
+grey jacket
+grey panties
+grey pants
+grey sailor collar
+grey shirt
+grey shorts
+grey skirt
+grey sweater
+grey vest
+gusset
+gyaru
+gym shirt
+gym shorts
+gym uniform
+habit
+hadanugi dousa
+hakama
+hakama short skirt
+hakama skirt
+half gloves
+halter dress
+halter top
+halterneck
+hanfu
+haori
+harness
+heart cutout
+high collar
+high-waist skirt
+highleg
+highleg bikini
+highleg leotard
+highleg panties
+highleg swimsuit
+hip vent
+holding panties
+holding underwear
+hood down
+hooded capelet
+hooded cloak
+hooded coat
+hooded jacket
+hoodie
+impossible bodysuit
+impossible clothes
+impossible dress
+impossible leotard
+impossible shirt
+jacket
+jacket around waist
+jacket on shoulders
+jacket removed
+japanese clothes
+jeans
+juliet sleeves
+jumpsuit
+kappougi
+kariginu
+kerchief
+keyhole
+kimono
+kindergarten uniform
+knee pads
+kogal
+korean clothes
+labcoat
+lace
+lace bra
+lace panties
+lace trim
+lace-trimmed bra
+lace-trimmed dress
+lace-trimmed panties
+large bow
+latex
+layered bikini
+layered clothing
+layered dress
+layered skirt
+layered sleeves
+leather
+leather jacket
+leg garter
+leggings
+leotard
+leotard under clothes
+letterman jacket
+lingerie
+loincloth
+lolita fashion
+long coat
+long dress
+long skirt
+long sleeves
+loose belt
+loose clothes
+loose necktie
+lowleg
+lowleg bikini
+lowleg panties
+maid
+maid apron
+maid bikini
+male swimwear
+male underwear
+matching outfit
+medium skirt
+meiji schoolgirl uniform
+micro bikini
+micro shorts
+microdress
+microskirt
+miko
+miniskirt
+mismatched bikini
+mismatched gloves
+mittens
+multi-strapped bikini
+multicolored bikini
+multicolored bodysuit
+multicolored clothes
+multicolored dress
+multicolored gloves
+multicolored jacket
+multicolored skirt
+multiple belts
+navel cutout
+neck ribbon
+neck ruff
+neckerchief
+necktie
+negligee
+neon trim
+nightgown
+no bra
+no pants
+no shirt
+nun
+nurse
+o-ring
+o-ring bikini
+o-ring bottom
+o-ring top
+obi
+obiage
+obijime
+off shoulder
+off-shoulder dress
+off-shoulder kimono
+off-shoulder shirt
+off-shoulder sweater
+old school swimsuit
+one-piece swimsuit
+open cardigan
+open clothes
+open coat
+open dress
+open hoodie
+open jacket
+open kimono
+open shirt
+open shorts
+open skirt
+open vest
+open-chest sweater
+orange bikini
+orange bodysuit
+orange bow
+orange bowtie
+orange dress
+orange gloves
+orange jacket
+orange necktie
+orange ribbon
+orange scarf
+orange shirt
+orange skirt
+overalls
+oversized clothes
+pajamas
+pant suit
+panties
+panties under pantyhose
+pants
+pants pull
+pantyhose pull
+pantylines
+partially fingerless gloves
+partially unbuttoned
+partially unzipped
+patterned clothing
+paw gloves
+pelvic curtain
+pencil dress
+pencil skirt
+petticoat
+pilot suit
+pinafore dress
+pink apron
+pink bikini
+pink bodysuit
+pink bow
+pink bowtie
+pink bra
+pink cardigan
+pink dress
+pink gloves
+pink jacket
+pink kimono
+pink leotard
+pink neckerchief
+pink necktie
+pink panties
+pink ribbon
+pink scarf
+pink shirt
+pink shorts
+pink skirt
+pink sleeves
+pink sweater
+pink swimsuit
+pirate
+plaid bikini
+plaid bow
+plaid dress
+plaid necktie
+plaid scarf
+plaid shirt
+plaid skirt
+plaid vest
+playboy bunny
+pleated dress
+pleated skirt
+pocket
+police uniform
+policewoman
+polka dot bikini
+polka dot bow
+polka dot bra
+polka dot panties
+pom pom (clothes)
+poncho
+popped collar
+print bikini
+print bow
+print bowtie
+print dress
+print gloves
+print kimono
+print panties
+print shirt
+print skirt
+puffy long sleeves
+puffy short sleeves
+puffy shorts
+puffy sleeves
+pulled by another
+pulled by self
+purple bikini
+purple bodysuit
+purple bow
+purple bowtie
+purple bra
+purple cape
+purple dress
+purple gloves
+purple jacket
+purple kimono
+purple leotard
+purple necktie
+purple panties
+purple pants
+purple ribbon
+purple scarf
+purple shirt
+purple shorts
+purple skirt
+purple sleeves
+purple vest
+race queen
+raglan sleeves
+raincoat
+red ascot
+red belt
+red bikini
+red bodysuit
+red bow
+red bowtie
+red bra
+red buruma
+red cape
+red capelet
+red coat
+red dress
+red gloves
+red hakama
+red jacket
+red kimono
+red leotard
+red neckerchief
+red necktie
+red panties
+red pants
+red ribbon
+red sailor collar
+red sash
+red scarf
+red shirt
+red shorts
+red skirt
+red sleeves
+red sweater
+red swimsuit
+red vest
+reindeer costume
+revealing clothes
+ribbed dress
+ribbed shirt
+ribbed sweater
+ribbon
+ribbon trim
+ribbon-trimmed clothes
+ribbon-trimmed collar
+ribbon-trimmed skirt
+ribbon-trimmed sleeves
+robe
+sailor
+sailor bikini
+sailor collar
+sailor dress
+sailor shirt
+santa bikini
+sarashi
+sarong
+sash
+scarf
+school swimsuit
+school uniform
+see-through
+see-through silhouette
+see-through sleeves
+serafuku
+shared scarf
+shawl
+sheer clothes
+shiny clothes
+shirt
+shirt pull
+shirt removed
+shirt tucked in
+shirt tug
+short dress
+short kimono
+short necktie
+short over long sleeves
+short shorts
+short sleeves
+shorts
+shorts pull
+shorts under skirt
+shoulder cutout
+shoulder pads
+shoulder spikes
+showgirl skirt
+shrug (clothing)
+side cutout
+side slit
+side-tie bikini
+side-tie panties
+sideless outfit
+silk
+single detached sleeve
+single elbow glove
+single glove
+single sleeve
+skin tight
+skirt
+skirt around one leg
+skirt hold
+skirt pull
+skirt removed
+skirt set
+skirt suit
+skirt tug
+sleepwear
+sleeve cuffs
+sleeveless
+sleeveless dress
+sleeveless jacket
+sleeveless kimono
+sleeveless shirt
+sleeveless turtleneck
+sleeves folded up
+sleeves past elbows
+sleeves past fingers
+sleeves past wrists
+sleeves pushed up
+sleeves rolled up
+slingshot swimsuit
+soccer uniform
+spacesuit
+spaghetti strap
+spandex
+sports bikini
+sports bra
+sportswear
+strap
+strap between breasts
+strap gap
+strap pull
+strap slip
+strapless
+strapless bikini
+strapless bra
+strapless dress
+strapless leotard
+string bikini
+string panties
+striped bikini
+striped bow
+striped bowtie
+striped bra
+striped dress
+striped gloves
+striped jacket
+striped necktie
+striped panties
+striped pants
+striped ribbon
+striped scarf
+striped shirt
+striped skirt
+striped sleeves
+striped swimsuit
+studded belt
+suit
+suit jacket
+summer uniform
+sundress
+suspender shorts
+suspender skirt
+suspenders
+sweater
+sweater around waist
+sweater dress
+sweater vest
+swim briefs
+swim trunks
+swimsuit
+swimsuit under clothes
+t-shirt
+tabard
+tailcoat
+tangzhuang
+tank top
+tankini
+tassel
+tasuki
+taut clothes
+taut shirt
+tennis uniform
+thigh ribbon
+thigh strap
+thighhighs pull
+thighlet
+thong
+thong bikini
+thong leotard
+tied shirt
+tight
+tight pants
+torn bodysuit
+torn cape
+torn clothes
+torn dress
+torn pants
+torn shirt
+torn skirt
+torn sleeves
+track jacket
+track pants
+track suit
+trench coat
+tress ribbon
+tube top
+tunic
+turtleneck
+turtleneck sweater
+tuxedo
+two-sided fabric
+two-tone bowtie
+two-tone dress
+two-tone ribbon
+two-tone shirt
+two-tone skirt
+unbuttoned
+unbuttoned shirt
+underboob cutout
+underbust
+undershirt
+undersized clothes
+underwear
+underwear only
+uneven gloves
+uneven sleeves
+uniform
+unzipped
+v-neck
+vertical-striped dress
+vertical-striped shirt
+vertical-striped skirt
+vest
+virgin killer sweater
+volleyball uniform
+wa maid
+waist apron
+waist bow
+waist cape
+waistcoat
+waitress
+wedding dress
+wet clothes
+wet shirt
+wet swimsuit
+white apron
+white ascot
+white belt
+white bikini
+white bloomers
+white blouse
+white bodysuit
+white bow
+white bowtie
+white bra
+white camisole
+white cape
+white capelet
+white cardigan
+white coat
+white dress
+white gloves
+white hoodie
+white jacket
+white kimono
+white leotard
+white male underwear
+white neckerchief
+white necktie
+white panties
+white pants
+white ribbon
+white robe
+white sailor collar
+white scarf
+white shirt
+white shorts
+white skirt
+white sleeves
+white sweater
+white swimsuit
+white tank top
+white vest
+wide sleeves
+wing collar
+winter clothes
+winter coat
+winter uniform
+wrestling outfit
+wrist cuffs
+wristband
+yellow ascot
+yellow bikini
+yellow bow
+yellow bowtie
+yellow bra
+yellow dress
+yellow gloves
+yellow jacket
+yellow kimono
+yellow neckerchief
+yellow necktie
+yellow panties
+yellow ribbon
+yellow scarf
+yellow shirt
+yellow shorts
+yellow skirt
+yellow sweater
+yukata
+zettai ryouiki
+zipper
+zipper pull tab
+
+[Shoes and socks]
+alternate legwear
+american flag legwear
+ankle boots
+ankle lace-up
+ankle socks
+argyle legwear
+armored boots
+asymmetrical footwear
+asymmetrical legwear
+barefoot
+black footwear
+blue footwear
+bobby socks
+boots
+brown footwear
+cross-laced footwear
+flats
+flip-flops
+footwear bow
+fur-trimmed boots
+fur-trimmed legwear
+geta
+green footwear
+grey footwear
+high heel boots
+high heels
+knee boots
+kneehighs
+lace-trimmed legwear
+lace-up boots
+leg warmers
+legwear under shorts
+loafers
+loose socks
+mary janes
+mismatched footwear
+mismatched legwear
+multicolored legwear
+no legwear
+no shoes
+no socks
+orange footwear
+over-kneehighs
+pantyhose
+paw shoes
+pink footwear
+platform footwear
+pumps
+purple footwear
+red footwear
+ribbed legwear
+ribbon-trimmed legwear
+rubber boots
+sandals
+santa boots
+seamed legwear
+sheer legwear
+shoe dangle
+shoe soles
+shoes
+shoes removed
+single kneehigh
+single leg pantyhose
+single shoe
+single sock
+single thighhigh
+slippers
+sneakers
+socks
+stirrup legwear
+strappy heels
+tabi
+tengu-geta
+thigh boots
+thighband pantyhose
+thighhighs
+thighhighs under boots
+toeless footwear
+toeless legwear
+uneven legwear
+uwabaki
+white footwear
+yellow footwear
+zouri
+
+[Hats and headwear]
+adjusting headwear
+alternate headwear
+animal hat
+animal hood
+backwards hat
+bandana
+baseball cap
+beanie
+beret
+black headband
+black headwear
+blue headwear
+bonnet
+bowl hat
+bridal veil
+brown headwear
+bunny hood
+cabbie hat
+cat hat
+cat hood
+chef hat
+circlet
+cowboy hat
+crescent hat ornament
+crown
+diadem
+dixie cup hat
+earmuffs
+fake animal ears
+fake horns
+fedora
+flat cap
+frilled hat
+fur hat
+fur-trimmed headwear
+fur-trimmed hood
+garrison cap
+goggles on headwear
+green headwear
+grey headwear
+hachimaki
+hair ribbon
+hair through headwear
+hand on headwear
+hands on headwear
+hat
+hat bow
+hat feather
+hat flower
+hat ornament
+hat removed
+hat ribbon
+head scarf
+head wreath
+headband
+headdress
+headpiece
+headwear removed
+helmet
+helmet removed
+holding hat
+hood
+hood up
+horned headwear
+jester cap
+laurel crown
+maid headdress
+military hat
+mini crown
+mini hat
+mini top hat
+mob cap
+nightcap
+no hat
+no headwear
+nurse cap
+orange headwear
+peaked cap
+pillow hat
+pink headwear
+pirate hat
+pith helmet
+police hat
+purple headwear
+red headband
+red headwear
+sailor hat
+santa hat
+school hat
+shako cap
+shark hood
+star hat ornament
+straw hat
+sun hat
+tam o' shanter
+tate eboshi
+tiara
+tilted headwear
+tokin hat
+top hat
+tulip hat
+turban
+veil
+visor cap
+white headband
+white headwear
+witch hat
+wizard hat
+yellow headwear
+
+[Accessories]
+adjusting eyewear
+animal collar
+ankle cuffs
+ankle ribbon
+anklet
+arm belt
+arm guards
+arm ribbon
+arm strap
+armlet
+backpack
+badge
+bag
+bag charm
+bangle
+beach umbrella
+bead bracelet
+bead necklace
+beads
+belly chain
+belt collar
+belt pouch
+bespectacled
+black choker
+black collar
+black-framed eyewear
+blue choker
+blue-framed eyewear
+bracelet
+briefcase
+brooch
+brown bag
+button badge
+cane
+carrot necklace
+chain necklace
+choker
+closed fan
+closed umbrella
+collar
+crescent earrings
+crescent pin
+cross earrings
+cross necklace
+diving mask
+dog tags
+domino mask
+duffel bag
+ear bow
+ear ribbon
+earclip
+earrings
+eyepatch
+eyewear on head
+eyewear removed
+feather boa
+flower earrings
+flower knot
+folding fan
+fox mask
+frilled choker
+gas mask
+gem
+glasses
+goggles
+goggles around neck
+goggles on head
+gold chain
+green choker
+green-framed eyewear
+grey-framed eyewear
+hand fan
+handbag
+heart choker
+heart earrings
+heart necklace
+heart-shaped eyewear
+holding eyewear
+hoop earrings
+jewelry
+keychain
+lanyard
+leg ribbon
+magatama
+magatama earrings
+mask
+mask on head
+mask removed
+medal
+medical eyepatch
+metal collar
+monocle
+moon (ornament)
+mouth mask
+multiple rings
+name tag
+neck bell
+neck ring
+necklace
+no eyewear
+oil-paper umbrella
+oni mask
+opaque glasses
+orange choker
+over-rim eyewear
+paper bag
+paper fan
+parasol
+pearl (gemstone)
+pearl necklace
+pendant
+pince-nez
+pink choker
+pink-framed eyewear
+plastic bag
+pocket watch
+pouch
+prayer beads
+purple choker
+purple umbrella
+randoseru
+red choker
+red collar
+red umbrella
+red-framed eyewear
+ribbon choker
+rimless eyewear
+ring
+round eyewear
+safety pin
+sapphire (gemstone)
+satchel
+school bag
+semi-rimless eyewear
+shared umbrella
+shopping bag
+shoulder bag
+single earring
+skull earrings
+spiked armlet
+spiked bracelet
+spiked collar
+star choker
+star earrings
+stud earrings
+sunglasses
+surgical mask
+sweatband
+tassel earrings
+thumb ring
+tie clip
+tinted eyewear
+transparent umbrella
+uchiwa
+umbrella
+under-rim eyewear
+watch
+wedding ring
+white choker
+white collar
+wrist ribbon
+wristwatch
+yellow choker
+
+[Poses and actions]
+\m/
+afloat
+against wall
+all fours
+arched back
+arm around neck
+arm around shoulder
+arm around waist
+arm at side
+arm behind back
+arm behind head
+arm grab
+arm held back
+arm hug
+arm rest
+arm support
+arm up
+arms around neck
+arms at sides
+arms behind back
+arms behind head
+arms up
+back-to-back
+bath
+bathing
+bent over
+between fingers
+biting
+breast smother
+bubble blowing
+bunny pose
+carrying
+carrying over shoulder
+chasing
+cheek pinching
+cheek poking
+cheek-to-cheek
+claw pose
+clenched hand
+clenched hands
+come hither
+confession
+contrapposto
+cooking
+covering eyes
+covering face
+covering mouth
+crossed ankles
+crossed arms
+crossed legs
+dancing
+doll hug
+double v
+drawing
+dreaming
+dressing
+drinking
+driving
+eating
+elbow rest
+face to breasts
+face-to-face
+facing another
+falling
+feeding
+fetal position
+fighting
+fighting stance
+finger gun
+finger in mouth
+finger to cheek
+finger to mouth
+finger to own chin
+fishing
+fleeing
+flexible
+floating
+flying
+fox shadow puppet
+french kiss
+giving
+grabbing
+grabbing another's chin
+grabbing another's hair
+hairdressing
+hand grab
+hand in pocket
+hand on another's arm
+hand on another's back
+hand on another's cheek
+hand on another's chest
+hand on another's chin
+hand on another's face
+hand on another's head
+hand on another's hip
+hand on another's shoulder
+hand on another's thigh
+hand on hip
+hand on own arm
+hand on own ass
+hand on own cheek
+hand on own chest
+hand on own chin
+hand on own face
+hand on own head
+hand on own knee
+hand on own stomach
+hand on own thigh
+hand over own mouth
+hand to own mouth
+hand up
+hands in opposite sleeves
+hands in pockets
+hands on another's face
+hands on another's head
+hands on another's shoulders
+hands on hips
+hands on lap
+hands on own cheeks
+hands on own chest
+hands on own face
+hands on own head
+hands on own knees
+hands up
+head bump
+head grab
+head rest
+head tilt
+headpat
+heads together
+heart hands
+heart hands duo
+hiding
+holding
+holding animal
+holding another's arm
+holding another's wrist
+holding bag
+holding ball
+holding book
+holding bottle
+holding bouquet
+holding bowl
+holding box
+holding broom
+holding camera
+holding can
+holding candy
+holding card
+holding cat
+holding chopsticks
+holding cigarette
+holding clothes
+holding cup
+holding doll
+holding fan
+holding flag
+holding flower
+holding fork
+holding fruit
+holding gift
+holding hands
+holding instrument
+holding lollipop
+holding mask
+holding microphone
+holding own arm
+holding paper
+holding pen
+holding phone
+holding pipe
+holding plate
+holding sign
+holding spoon
+holding strap
+holding stuffed toy
+holding towel
+holding tray
+holding umbrella
+horseback riding
+hug
+hug from behind
+hugging own legs
+imminent kiss
+in container
+index finger raised
+indian style
+interlocked fingers
+jack-o' challenge
+jumping
+kabedon
+kicking
+kiss
+kissing cheek
+kissing forehead
+knee up
+kneeling
+knees on chest
+knees to chest
+knees together feet apart
+knees up
+lap pillow
+leaning
+leaning back
+leaning forward
+leaning on person
+leaning to the side
+leg grab
+leg lift
+leg up
+legs apart
+legs together
+legs up
+licking
+licking finger
+lifting person
+locked arms
+lying
+lying on person
+midair
+middle finger
+mouth hold
+object hug
+object on head
+ok sign
+on back
+on bed
+on chair
+on couch
+on desk
+on floor
+on ground
+on head
+on shoulder
+on side
+on stomach
+one knee
+open hand
+open hands
+outstretched arm
+outstretched arms
+outstretched hand
+over shoulder
+own hands clasped
+own hands together
+partially submerged
+paw pose
+peeking
+peeking out
+pigeon-toed
+piggyback
+pillow hug
+pinching
+pinky out
+playing games
+playing instrument
+pocky kiss
+pointing
+pointing at self
+pointing at viewer
+pointing up
+poking
+pouring
+praying
+princess carry
+pulling
+punching
+reaching
+reaching out
+reading
+reclining
+recording
+riding
+rubbing eyes
+running
+salute
+seiza
+selfie
+shading eyes
+shoulder carry
+showering
+shushing
+side-by-side
+singing
+sitting
+sitting in tree
+sitting on bed
+sitting on desk
+sitting on lap
+sitting on person
+sleeping
+sleeping on person
+sleeping upright
+smelling
+smoking
+soaking feet
+spilling
+spitting
+splashing
+split
+spread arms
+spread fingers
+spread legs
+squatting
+standing
+standing on one leg
+standing split
+steepled fingers
+straddling
+stretch
+submerged
+surprise kiss
+swimming
+taking picture
+talking
+the pose
+thigh grab
+throwing
+thumbs up
+tickling
+tied up (nonsexual)
+tiptoes
+torso grab
+trembling
+tripping
+twisted torso
+unconscious
+under covers
+under table
+undressing
+upside-down
+v
+v arms
+v over eye
+w
+w arms
+wading
+waking up
+walking
+wariza
+waving
+writing
+yawning
+yokozuwari
+
+[Animals]
+animal
+animal focus
+animal on head
+animal on shoulder
+antlers
+bat
+beak
+bear
+bird
+bird on hand
+bird on head
+black cat
+blue butterfly
+brown fur
+bug
+bunny
+butterfly
+cat
+chick
+chicken
+clothed animal
+crab
+crow
+dog
+dolphin
+dove
+duck
+ear tag
+fireflies
+fish
+floppy ears
+fluffy
+fox
+frog
+goldfish
+hamster
+horse
+jellyfish
+lion
+monkey
+mouse
+octopus
+oversized animal
+owl
+panda
+penguin
+pig
+seagull
+seashell
+shark
+sheep
+shell
+shrimp
+snake
+snout
+spider
+squid
+squirrel
+starfish
+talons
+tanuki
+tiger
+turtle
+turtle shell
+tusks
+two-tone fur
+whale
+whiskers
+white cat
+white fur
+wolf
+
+[Plants and flowers]
+against tree
+autumn leaves
+bamboo
+bamboo forest
+bare tree
+black flower
+black rose
+blue flower
+blue rose
+bouquet
+branch
+bush
+cherry blossoms
+clover
+daisy
+falling leaves
+falling petals
+flower
+flower pot
+flower wreath
+four-leaf clover
+grass
+hibiscus
+holly
+hydrangea
+in tree
+leaf
+leaf on head
+lily (flower)
+lily pad
+lotus
+maple leaf
+moss
+mushroom
+orange flower
+palm tree
+petals
+pink flower
+pink rose
+plant
+potted plant
+purple flower
+purple rose
+red flower
+red rose
+rose
+rose petals
+spider lily
+sunflower
+thorns
+tree
+tree shade
+vines
+white flower
+white rose
+wreath
+yellow flower
+yellow rose
+
+[Food and drink]
+alcohol
+apple
+banana
+baozi
+beer
+beer can
+beer mug
+bento
+bottle
+bowl
+bread
+bubble tea
+burger
+cake
+cake slice
+can
+candy
+candy apple
+candy cane
+carrot
+checkerboard cookie
+cheese
+cherry
+chewing gum
+chips
+chocolate
+chopsticks
+cocktail glass
+coffee
+coffee cup
+coffee mug
+cookie
+cream
+crepe
+cucumber
+cup
+cupcake
+curry
+dango
+dessert
+disposable cup
+doughnut
+drink
+drinking glass
+drinking straw
+egg
+egg (food)
+food
+food focus
+food in mouth
+food on face
+food on head
+fork
+french fries
+fried egg
+fruit
+frying pan
+glass
+grapes
+heart-shaped chocolate
+holding food
+ice cream
+ice cream cone
+ice cube
+juice box
+ladle
+lemon
+lemon slice
+lollipop
+macaron
+mandarin orange
+meat
+milk
+milk bottle
+mochi
+mug
+noodles
+onigiri
+orange (fruit)
+pancake
+parfait
+pastry
+peach
+pizza
+plate
+pocky
+popsicle
+potato chips
+pudding
+ramen
+rice
+rice bowl
+sakazuki
+sake
+sake bottle
+sandwich
+saucer
+shared food
+shaved ice
+skewer
+soda can
+spatula
+spoon
+spring onion
+strawberry
+strawberry shortcake
+sushi
+sweet potato
+sweets
+swirl lollipop
+taiyaki
+tea
+teacup
+teapot
+toast
+tokkuri
+tomato
+tray
+vegetable
+wagashi
+water bottle
+watermelon
+whisk
+wine
+wine bottle
+wine glass
+yunomi
+
+[Places]
+alley
+arch
+architecture
+balcony
+bar
+bathroom
+bedroom
+bridge
+building
+car interior
+castle
+church
+city
+city lights
+cityscape
+classroom
+east asian architecture
+graveyard
+hallway
+house
+indoors
+kitchen
+lawson
+library
+locker room
+onsen
+pillar
+pool
+pool ladder
+poolside
+railing
+railroad tracks
+restaurant
+road
+road sign
+rooftop
+ruins
+school
+shop
+shrine
+skyscraper
+stage
+stage lights
+stained glass
+street
+torii
+tower
+town
+train interior
+train station
+veranda
+
+[Nature and outdoors]
+air bubble
+beach
+cave
+cliff
+coral
+desert
+field
+flower field
+footprints
+forest
+hill
+horizon
+ice
+lake
+landscape
+mountain
+mountainous horizon
+nature
+ocean
+outdoors
+path
+pond
+ripples
+river
+rock
+sand
+scenery
+shore
+underwater
+water
+water drop
+waterfall
+waves
+
+[Sky and weather]
+autumn
+blue sky
+breath
+cloud
+cloudy sky
+cold
+constellation
+contrail
+crescent moon
+dappled sunlight
+day
+dusk
+dust
+earth (planet)
+evening
+fog
+full moon
+gradient sky
+grey sky
+lightning
+moon
+moonlight
+night
+night sky
+orange sky
+planet
+puddle
+rain
+rainbow
+red moon
+red sky
+shooting star
+sky
+smoke
+snow
+snowflakes
+snowing
+space
+spring (season)
+star (sky)
+starry sky
+steam
+summer
+sun
+sunlight
+sunrise
+sunset
+twilight
+wind
+winter
+
+[Vehicles]
+aircraft
+airplane
+bicycle
+boat
+car
+caterpillar tracks
+cockpit
+jet
+motor vehicle
+motorcycle
+ship
+space craft
+train
+vehicle focus
+watercraft
+
+[Home and furniture]
+alarm clock
+armchair
+bathtub
+bed
+bed sheet
+bench
+blanket
+bookshelf
+brick wall
+carpet
+ceiling
+chain-link fence
+chair
+checkered floor
+clock
+couch
+counter
+curtains
+cushion
+desk
+door
+doorway
+drawer
+electric fan
+faucet
+fence
+floor
+frilled pillow
+futon
+heart pillow
+kotatsu
+lamp
+lounge chair
+mirror
+office chair
+open door
+picture frame
+pillow
+refrigerator
+rug
+school chair
+school desk
+shelf
+shouji
+shower head
+sink
+sliding doors
+stairs
+stool
+table
+tatami
+throne
+tile floor
+tile wall
+tiles
+toilet
+vase
+wall
+window
+wooden floor
+
+[Things]
+american flag
+anchor
+balloon
+bamboo broom
+banner
+barrel
+basket
+beach towel
+bell
+binoculars
+birdcage
+black feathers
+bone
+book
+book stack
+box
+broken
+broken glass
+broom
+bubble
+bucket
+burning
+cable
+cage
+calendar (object)
+calligraphy brush
+camera
+candle
+card
+cardboard box
+cellphone
+chain
+chainsaw
+chalkboard
+character doll
+charm (object)
+cigar
+cigarette
+clipboard
+clothes hanger
+coin
+comb
+computer
+cosmetics
+cowbell
+crack
+crystal
+cube
+damaged
+debris
+destruction
+digital media player
+doll
+drawing tablet
+drill
+embers
+envelope
+eraser
+feathers
+figure
+fire
+flag
+flame
+flask
+floating object
+gears
+gift
+gift box
+glowstick
+gohei
+gourd
+hammer
+hand puppet
+head-mounted display
+heart-shaped box
+hose
+id card
+in box
+in bucket
+incoming gift
+inflatable toy
+innertube
+japanese flag
+jar
+jingle bell
+key
+keyboard (computer)
+kiseru
+ladder
+lamppost
+lantern
+laptop
+leash
+letter
+lifebuoy
+light bulb
+liquid
+lock
+locker
+lotion
+machinery
+magazine (object)
+mallet
+manga (object)
+map
+mechanical pencil
+megaphone
+melting
+menu
+messy
+mimikaki
+money
+monitor
+mop
+mouse (computer)
+nail
+needle
+newspaper
+notebook
+ofuda
+open book
+orb
+oversized object
+paddle
+padlock
+paintbrush
+painting (object)
+paper
+paper lantern
+pen
+pencil
+phone
+phone screen
+photo (object)
+picture (object)
+pill
+pipe
+pipes
+pointer
+pole
+poster (object)
+power lines
+puppet
+quill
+remote control
+ritual baton
+rope
+rubber duck
+rubble
+sack
+scepter
+scissors
+scroll
+shide
+shikishi
+shimenawa
+shovel
+sign
+sketchbook
+skull
+smartphone
+smokestack
+snowman
+soap
+soap bubbles
+sparks
+spider web
+spikes
+spill
+statue
+stethoscope
+stick
+string
+string of flags
+stuffed animal
+stuffed bunny
+stuffed cat
+stuffed toy
+stylus
+suitcase
+swing
+syringe
+tablet pc
+talisman
+tape
+tarot
+teddy bear
+television
+test tube
+tissue
+tissue box
+tombstone
+toothbrush
+torch
+towel
+towel around neck
+towel on head
+toy
+trading card
+traffic light
+trash can
+tube
+utility pole
+vending machine
+vial
+viewfinder
+water gun
+watering can
+whistle
+white feathers
+wind chime
+windsock
+wire
+wooden bucket
+wrench
+
+[Music]
+bass guitar
+beamed eighth notes
+beamed sixteenth notes
+cat ear headphones
+drum
+drumsticks
+earbuds
+earphones
+eighth note
+electric guitar
+flute
+guitar
+headphones
+headphones around neck
+headset
+idol
+instrument
+instrument case
+keyboard (instrument)
+microphone
+microphone stand
+music
+musical note
+piano
+plectrum
+quarter note
+speaker
+staff (music)
+treble clef
+trumpet
+violin
+
+[Sports and games]
+ball
+baseball
+baseball bat
+basketball
+beachball
+board game
+boxing gloves
+chess piece
+controller
+d-pad
+dice
+exercise
+fishing rod
+freediving
+game console
+game controller
+handheld game console
+mahjong
+nintendo switch
+playing card
+playstation portable
+pom pom (cheerleading)
+racket
+roller skates
+skates
+soccer ball
+surfboard
+tennis racket
+video game
+volleyball
+wrestling
+
+[Occasions]
+akeome
+anniversary
+birthday
+birthday cake
+bride
+chinese zodiac
+christmas
+christmas ornaments
+christmas tree
+confetti
+festival
+fireworks
+halloween
+halloween costume
+happy birthday
+happy halloween
+happy new year
+happy valentine
+jack-o'-lantern
+merry christmas
+nengajou
+new year
+pocky day
+pumpkin
+reindeer antlers
+santa costume
+setsubun
+tanabata
+trick or treat
+valentine
+wedding
+wedding band
+year of the ox
+
+[Weapons and military]
+aiming
+aiming at viewer
+anti-materiel rifle
+armor
+arrow (projectile)
+assault rifle
+attack
+axe
+battle
+black armor
+blade
+blood on weapon
+bolt action
+bomb
+bow (weapon)
+bracer
+breastplate
+bullet
+bullpup
+cannon
+claw (weapon)
+club (weapon)
+crossbow
+dagger
+dual wielding
+duel
+explosion
+explosive
+faulds
+finger on trigger
+firing
+full armor
+gatling gun
+gauntlets
+gorget
+greaves
+grenade
+gun
+hand on hilt
+handgun
+heckler & koch
+holding arrow
+holding axe
+holding bow (weapon)
+holding gun
+holding knife
+holding polearm
+holding scythe
+holding sheath
+holding shield
+holding sword
+holding weapon
+holster
+huge weapon
+japanese armor
+katana
+knife
+kote
+kunai
+lance
+m4 carbine
+mace
+machine gun
+magazine (weapon)
+military
+military jacket
+military uniform
+military vehicle
+missile
+muneate
+naginata
+naval uniform
+pauldrons
+pistol
+planted
+planted sword
+polearm
+quiver
+rapier
+reverse grip
+revolver
+rifle
+rocket launcher
+scabbard
+scope
+scythe
+sheath
+sheathed
+shell casing
+shield
+short sword
+shotgun
+shoulder armor
+shuriken
+sniper rifle
+sode
+soldier
+spear
+submachine gun
+sword
+tank
+thigh holster
+torpedo
+trident
+trigger discipline
+turret
+unsheathed
+unsheathing
+vambraces
+warship
+weapon
+weapon on back
+weapon over shoulder
+wooden sword
+world war ii
+yugake
+
+[Text and symbols]
+!
+!!
+!?
+...
+2010
+2011
+2012
+2013
+2014
+2015
+2016
+2017
+2018
+2019
+2020
+2021
+?
+??
+anchor symbol
+arrow (symbol)
+background text
+barcode
+brand name imitation
+chart
+chinese text
+circle
+clothes writing
+company name
+crescent
+cross
+dated
+diamond (shape)
+diamond (symbol)
+emblem
+english text
+engrish text
+flower (symbol)
+german text
+graffiti
+hammer and sickle
+heart
+hexagram
+insignia
+iron cross
+korean text
+latin cross
+lightning bolt symbol
+logo
+mitsudomoe (shape)
+numbered
+pentacle
+pentagram
+power symbol
+profanity
+romaji text
+roman numeral
+russian text
+signature
+skull and crossbones
+smiley face
+song name
+spade (shape)
+star (symbol)
+subtitled
+sun symbol
+tally
+text focus
+thank you
+title
+tomoe (symbol)
+trefoil
+triangle
+union jack
+watermark
+watson cross
+web address
+yin yang
+zzz
+
+[Colors and patterns]
+animal print
+aqua theme
+argyle
+bat print
+blue theme
+brown theme
+bunny print
+butterfly print
+camouflage
+cat print
+cherry blossom print
+colorful
+cow print
+diagonal stripes
+egasumi
+flag print
+floral print
+food print
+gold
+green theme
+heart print
+leaf print
+leopard print
+orange theme
+paw print
+pink theme
+pinstripe pattern
+plaid
+polka dot
+purple theme
+rainbow order
+red theme
+rose print
+serval print
+single vertical stripe
+skull print
+snowflake print
+spider web print
+star print
+strawberry print
+striped
+tiger print
+vertical stripes
+white theme
+yellow theme
+
+[Photo style]
+abstract background
+aqua background
+argyle background
+backlighting
+black background
+black border
+bloom
+blue background
+blurry
+blurry background
+blurry foreground
+bokeh
+border
+brown background
+caustics
+checkered background
+chromatic aberration
+close-up
+colorized
+cowboy shot
+cropped
+cropped legs
+cropped torso
+dark
+dark background
+darkness
+depth of field
+diffraction spikes
+drop shadow
+dutch angle
+facing away
+facing viewer
+feet out of frame
+female pov
+film grain
+fisheye
+floral background
+foot out of frame
+foreshortening
+from above
+from behind
+from below
+from side
+full body
+glint
+gradient background
+green background
+grey background
+greyscale
+halftone background
+head out of frame
+heart background
+high contrast
+jpeg artifacts
+lens flare
+letterboxed
+light
+light particles
+light rays
+light trail
+lights
+lower body
+monochrome
+motion blur
+multicolored background
+muted color
+orange background
+out of frame
+pale color
+patterned background
+perspective
+photo (medium)
+photo background
+pillarboxed
+pink background
+plaid background
+polka dot background
+portrait
+pov
+pov hands
+profile
+purple background
+real life
+real life insert
+red background
+reflection
+sepia
+shade
+shadow
+silhouette
+simple background
+sparkle
+sparkle background
+spotlight
+starry background
+straight-on
+striped background
+sunbeam
+symmetry
+tall image
+transparent
+two-tone background
+upper body
+white background
+white border
+wide image
+wide shot
+yellow background
+
+[Art and illustration]
+1980s (style)
+1990s (style)
+1koma
+2koma
+3d
+3koma
+4koma
+5koma
+abstract
+afterimage
+album cover
+alternate color
+alternate universe
+anger vein
+anime coloring
+artbook
+artist logo
+artist name
+artist self-insert
+bad anatomy
+bad feet
+bad hands
+bad proportions
+blank eyes
+blush stickers
+body blush
+borrowed character
+bright pupils
+calendar (medium)
+cameo
+card (medium)
+character name
+character profile
+character sheet
+chibi
+chibi inset
+circle cut
+circle name
+clip studio paint (medium)
+collaboration
+collage
+color connection
+color guide
+colored pencil (medium)
+comic
+commission
+company connection
+concept art
+constricted pupils
+contemporary
+copyright
+copyright name
+cover
+cover image
+cover page
+crazy eyes
+creator connection
+crossover
+dakimakura (medium)
+deviantart username
+dot nose
+doujin cover
+drawfag
+drawr
+ear blush
+emphasis lines
+error
+expressions
+extra
+eyebrows behind hair
+eyebrows visible through hair
+eyes visible through hair
+faceless
+faceless female
+faceless male
+failure
+fake screenshot
+fanbox reward
+faux traditional media
+fine art parody
+flat color
+flower-shaped pupils
+flying sweatdrops
+fourth wall
+framed
+game cg
+gameplay mechanics
+gimp (medium)
+graphite (medium)
+hair between eyes
+halftone
+hatching (texture)
+heart in eye
+heart in mouth
+horror (theme)
+identity censor
+image sample
+imagining
+ink
+invisible chair
+jaggy line
+left-to-right manga
+limited palette
+lineart
+look-alike
+magazine cover
+magazine scan
+marker (medium)
+mascot
+meme
+meme attire
+milestone celebration
+millipen (medium)
+motion lines
+multiple 4koma
+multiple crossover
+multiple views
+namesake
+nib pen (medium)
+no eyes
+no mouth
+no nose
+no pupils
+nose blush
+nose bubble
+nosebleed
+notice lines
+novel illustration
+object namesake
+oekaki
+official art
+official style
+official wallpaper
+one-hour drawing challenge
+original
+outline
+outside border
+paid reward
+paint
+paint splatter
+paint.net (medium)
+painting
+painting (medium)
+painttool sai (medium)
+parody
+partially colored
+patreon logo
+patreon username
+photo-referenced
+photoshop (medium)
+pixel art
+product placement
+projected inset
+promotional art
+pun
+realistic
+resized
+retro artstyle
+round teeth
+sample
+scan
+scan artifacts
+screencap
+screencap redraw
+shaded face
+silent comic
+skeb commission
+sketch
+solid circle eyes
+solid oval eyes
+sound effects
+sparkling eyes
+speech bubble
+speed lines
+split mouth
+spoken anger vein
+spoken blush
+spoken ellipsis
+spoken exclamation mark
+spoken heart
+spoken interrobang
+spoken musical note
+spoken question mark
+spoken squiggle
+spoken sweatdrop
+spot color
+squiggle
+star in eye
+still life
+stitched
+style parody
+sunburst
+surreal
+sweatdrop
+symbol in eye
+tachi-e
+take your pick
+tegaki
+text-only page
+third-party edit
+thought bubble
+time paradox
+too many
+traditional media
+truth
+turnaround
+twitter username
+typo
+uneven eyes
+unfinished
+unmoving pattern
+upscaled
+variations
+vector trace
+voice actor connection
+watercolor (medium)
+wavy mouth
+weibo username
+what
+when you see it
+white eyes
+white outline
+you're doing it wrong
+zoom layer
+
+[Anime and games]
+(9)
+a1
+abigail williams (fate)
+abubu
+abukuma (kancolle)
+abyssal ship
+accelerator (toaru majutsu no index)
+ace attorney
+adapted costume
+admiral (kancolle)
+aegis (persona)
+aerith gainsborough
+aether (genshin impact)
+agahari
+agano (kancolle)
+ahri (league of legends)
+aida mana
+aikatsu!
+aikatsu! (series)
+aino minako
+air
+aisaka taiga
+akagi (azur lane)
+akagi (kancolle)
+akai haato
+akashi (kancolle)
+akatsuki (kancolle)
+akatsuki kirika
+akaza akari
+akebono (kancolle)
+akemi homura
+aki minoriko
+aki shizuha
+akigumo (kancolle)
+akitsu maru (kancolle)
+akiyama mio
+akiyama yukari
+akizuki (kancolle)
+akizuki ritsuko
+akuma homura
+aldnoah.zero
+alice (alice in wonderland)
+alice gear aegis
+alice in wonderland
+alice margatroid
+alternate costume
+alternate eye color
+alternate form
+alternate hair color
+alternate hair length
+alternate hairstyle
+alternate weapon
+amagami
+amagi brilliant park
+amagi yukiko
+amami haruka
+amamiya ren
+amane kanata
+amatsukaze (kancolle)
+amber (genshin impact)
+amiya (arknights)
+anastasia (fate)
+anastasia (idolmaster)
+anchovy (girls und panzer)
+andou (girls und panzer)
+android 18
+angel beats!
+animal crossing
+animalization
+animification
+ano hi mita hana no namae wo bokutachi wa mada shiranai.
+antennae
+anzio school uniform
+aoba (kancolle)
+aoki hagane no arpeggio
+aoki reika
+apex legends
+aqua (konosuba)
+ar tonelico
+arashio (kancolle)
+arcana heart
+archer (fate)
+arcueid brunestud
+aria
+arknights
+artoria pendragon (alter swimsuit rider) (fate)
+artoria pendragon (fate)
+artoria pendragon (lancer) (fate)
+asahina mikuru
+asakura ryouko
+asashimo (kancolle)
+asashio (kancolle)
+ash ketchum
+ashigara (kancolle)
+ashiya douman (fate)
+astolfo (fate)
+asui tsuyu
+asuna (blue archive)
+asuna (sao)
+atago (azur lane)
+atago (kancolle)
+atelier (series)
+atelier ryza
+atlanta (kancolle)
+au ra
+autobot
+avatar (ff11)
+avatar (ff14)
+avatar (series)
+avogado6
+axis powers hetalia
+ayanami (azur lane)
+ayanami (kancolle)
+ayanami rei
+ayase eli
+azumanga daioh
+azur lane
+bakemonogatari
+bang dream!
+bara
+barbara (genshin impact)
+bardiche
+barnaby brooks jr.
+battle tendency
+battleship princess
+bayonetta (series)
+bb (baalbuddy)
+bb (fate)
+bb (fate/extra)
+bb (swimsuit mooncancer) (fate)
+bea (pokemon)
+beam rifle
+beatrice (umineko)
+belfast (azur lane)
+beni shake
+bishamonten's pagoda
+bishoujo senshi sailor moon
+bishounen
+bismarck (kancolle)
+bkub
+black lagoon
+black rock shooter
+black rock shooter (character)
+blade (galaxist)
+blake belladonna
+blazblue
+bleach
+bloodborne
+blue archive
+blue oak
+boko (girls und panzer)
+boku no hero academia
+boku wa tomodachi ga sukunai
+boris (noborhys)
+bow (bhp)
+bowsette
+brave witches
+breath of fire
+bremerton (azur lane)
+brendan (pokemon)
+butcha-u
+byleth (fire emblem)
+byleth (fire emblem) (female)
+c.c.
+caesar anthonio zeppeli
+callie (splatoon)
+cammy white
+capcom
+cardcaptor sakura
+carnelian
+cato (monocatienus)
+ch'en (arknights)
+chainsaw man
+chaldea uniform
+chanta (ayatakaoisii)
+charizard
+charlotte (madoka magica)
+charlotte dunois
+charlotte e. yeager
+chen
+chihuri
+chitanda eru
+chiyoda momo
+chloe von einzbern
+choukai (kancolle)
+christa renz
+chun-li
+chuunibyou demo koi ga shitai!
+cinderella girls gekijou
+cirno
+clannad
+clothed pokemon
+cloud strife
+clownpiece
+code geass
+commander (azur lane)
+common raccoon (kemono friends)
+cookie (touhou)
+corrin (fire emblem)
+corrin (fire emblem) (female)
+costume switch
+cu chulainn (fate)
+cu chulainn (fate/stay night)
+cure peace
+cynthia (pokemon)
+d.va (overwatch)
+dagashi kashi
+daiwa scarlet (umamusume)
+daiyousei
+danganronpa (series)
+danganronpa 2: goodbye despair
+danganronpa v3: killing harmony
+danganronpa: trigger happy havoc
+danmaku
+darjeeling (girls und panzer)
+dark magician girl
+dark persona
+dark souls (series)
+dark souls i
+darker than black
+darling in the franxx
+date a live
+dawn (pokemon)
+dc comics
+dd (ijigendd)
+dead or alive
+dei shirou
+dengeki moeou
+devil may cry (series)
+diamond wa kudakenai
+diarmuid ua duibhne (lancer) (fate)
+digimon
+digimon (creature)
+dio brando
+disgaea
+disney
+dizzy (guilty gear)
+djeeta (granblue fantasy)
+doctor (arknights)
+dog days
+doki doki literature club
+dokidoki! precure
+don-chan (usada pekora)
+doremy sweet
+dowsing rod
+dragon ball
+dragon ball (classic)
+dragon ball super
+dragon ball z
+dragon quest
+dragon quest iii
+dragon quest iv
+dragon quest v
+dragon's crown
+draph
+dual persona
+duel monster
+dungeon and fighter
+dungeon ni deai wo motomeru no wa machigatteiru darou ka
+durarara!!
+dynamax band
+ear covers
+ebifurya
+edelgard von hresvelg
+edward elric
+eevee
+eila ilmatar juutilainen
+eiyuu densetsu
+elizabeth bathory (fate)
+elizabeth bathory (fate/extra ccc)
+elsa (frozen)
+elsword
+embellished costume
+emilia (re:zero)
+emiya kiritsugu
+emiya shirou
+enemy aircraft (kancolle)
+enkyo yuuichirou
+enmaided
+enoshima junko
+enpera
+enterprise (azur lane)
+eren yeager
+ereshkigal (fate)
+erica hartmann
+eromanga sensei
+erune
+ethan (pokemon)
+eula (genshin impact)
+eureka seven (series)
+evangelion: 2.0 you can (not) advance
+evangelion: 3.0 you can (not) redo
+everyone
+evolutionary line
+ex-keine
+excalibur (fate/stay night)
+exusiai (arknights)
+fairy (kancolle)
+fairy tail
+fatal fury
+fate (series)
+fate testarossa
+fate/apocrypha
+fate/extra
+fate/extra ccc
+fate/grand order
+fate/hollow ataraxia
+fate/kaleid liner prisma illya
+fate/prototype
+fate/prototype: fragments of blue and silver
+fate/stay night
+fate/unlimited codes
+fate/zero
+felicia (vampire)
+female admiral (kancolle)
+fennec (kemono friends)
+final fantasy
+final fantasy iv
+final fantasy ix
+final fantasy tactics
+final fantasy v
+final fantasy vi
+final fantasy vii
+final fantasy vii remake
+final fantasy x
+final fantasy xi
+final fantasy xiv
+fire emblem
+fire emblem awakening
+fire emblem cipher
+fire emblem echoes: shadows of valentia
+fire emblem fates
+fire emblem heroes
+fire emblem: genealogy of the holy war
+fire emblem: mystery of the emblem
+fire emblem: path of radiance
+fire emblem: radiant dawn
+fire emblem: the binding blade
+fire emblem: the blazing blade
+fire emblem: the sacred stones
+fire emblem: three houses
+fischl (genshin impact)
+flandre scarlet
+flight deck
+florence nightingale (fate)
+flower knight girl
+forehead protector
+formidable (azur lane)
+fou (fate)
+francesca lucchini
+frapowa
+free!
+fresh precure!
+frozen (disney)
+fubuki (kancolle)
+fujibayashi kyou
+fujimaru ritsuka (female)
+fujimaru ritsuka (male)
+fujiwara no mokou
+fullmetal alchemist
+fumio (rsqkr)
+funami yui
+furude rika
+furukawa nagisa
+fusion
+fusou (kancolle)
+futa (nabezoko)
+futaba anzu
+futami ami
+futami mami
+futari wa precure
+futatsuiwa mamizou
+gabriel dropout
+gae bolg (fate)
+galaga
+galaxy angel
+gamagoori ira
+gambier bay (kancolle)
+ganaha hibiki
+gangut (kancolle)
+ganyu (genshin impact)
+gaoo (frpjx283)
+gap (touhou)
+gardevoir
+garreg mach monastery uniform
+gate
+gawr gura
+gegege no kitarou
+gekkoukan high school uniform
+gem uniform (houseki no kuni)
+genderswap
+genderswap (ftm)
+genderswap (mtf)
+genshin impact
+gensou suikoden
+gertrud barkhorn
+ghost in the shell
+gilgamesh (fate)
+gintama
+giorno giovanna
+girls und panzer
+girls' frontline
+gloria (pokemon)
+go! princess precure
+go-toubun no hanayome
+gochuumon wa usagi desu ka?
+god eater
+gokou ruri
+gold ship (umamusume)
+golden kamuy
+gotland (kancolle)
+graf zeppelin (kancolle)
+gran (granblue fantasy)
+granblue fantasy
+gridman universe
+guilty crown
+guilty gear
+guilty gear strive
+guilty gear xrd
+gumi
+gundam
+gundam 00
+gundam build fighters
+gundam build fighters try
+gundam seed
+gundam seed destiny
+gundam tekketsu no orphans
+gundam unicorn
+ha akabouzu
+hagiwara yukiho
+haguro (kancolle)
+haikyuu!!
+hakurei reimu
+hakurei reimu (cosplay)
+hamakaze (kancolle)
+hammer (sunset beach)
+hamu koutarou
+han juri
+hanamura yousuke
+hanasaki tsubomi
+hanekawa tsubasa
+hanyuu
+happinesscharge precure!
+harem
+haruna (kancolle)
+haruno sakura
+harusame (kancolle)
+haruyama kazunori
+harvin
+hassan of serenity (fate)
+hata no kokoro
+hataraku saibou
+hatsune miku
+hatsune miku (append)
+hatsuyuki (kancolle)
+hatsuzuki (kancolle)
+hayami kanade
+hayate no gotoku!
+heart of string
+heartcatch precure!
+hecatia lapislazuli
+helltaker
+hestia (danmachi)
+hibike! euphonium
+hibiki (kancolle)
+hidamari sketch
+hieda no akyuu
+hiei (kancolle)
+higashi setsuna
+higashikata josuke
+high school dxd
+higuchi madoka
+higurashi no naku koro ni
+hiiragi kagami
+hiiragi tsukasa
+hijiri byakuren
+hikarizaka private high school uniform
+hilbert (pokemon)
+hilda (pokemon)
+himekaidou hatate
+hinanawi tenshi
+hinata hajime
+hino akane (smile precure!)
+hirasawa ui
+hirasawa yui
+hiro (darling in the franxx)
+hiryuu (kancolle)
+hisahiko
+hishikawa rikka
+hisona (suaritesumi)
+hk416 (girls' frontline)
+hojo karen
+holding poke ball
+holding pokemon
+holo
+hololive
+hololive english
+hololive indonesia
+homurahara academy uniform
+honda mio
+hong meiling
+honkai (series)
+honkai impact 3rd
+horikawa raiko
+horseshoe ornament
+hoshiguma yuugi
+hoshii miki
+hoshimachi suisei
+hoshizora miyuki
+hoshizora rin
+hoto cocoa
+houjou hibiki
+houjou satoko
+houjuu nue
+houraisan kaguya
+houseki no kuni
+houshou (kancolle)
+houshou marine
+houtengeki
+hu tao (genshin impact)
+humanization
+hungry clicker
+hunter x hunter
+hyouka
+hyuuga (kancolle)
+hyuuga hinata
+i-168 (kancolle)
+i-19 (kancolle)
+i-401 (kancolle)
+i-58 (kancolle)
+i-8 (kancolle)
+i-class destroyer
+ia (vocaloid)
+ib
+ibaraki douji (fate)
+ibaraki kasen
+ibuki suika
+ichimi
+ichinose shiki
+icho private high school uniform
+ido (teketeke)
+idolmaster
+idolmaster (classic)
+idolmaster 1
+idolmaster 2
+idolmaster cinderella girls
+idolmaster cinderella girls starlight stage
+idolmaster dearly stars
+idolmaster million live!
+idolmaster million live! theater days
+idolmaster shiny colors
+idolmaster side-m
+iesupa
+if they mated
+ikamusume
+ikari shinji
+ikazuchi (kancolle)
+ikkitousen
+illustrious (azur lane)
+illyasviel von einzbern
+ilya kuvshinov
+imaizumi kagerou
+imizu (nitro unknown)
+in food
+inaba tewi
+inazuma (kancolle)
+inazuma eleven
+inazuma eleven (series)
+inazuma eleven go
+inazuma eleven go chrono stone
+index (toaru majutsu no index)
+indie virtual youtuber
+infection monitor (arknights)
+infinite stratos
+inkling
+instant loss
+interface headset
+inubashiri momiji
+inugami korone
+inuyasha
+iowa (kancolle)
+irisviel von einzbern
+ise (kancolle)
+ishiyumi
+ishtar (fate)
+iskandar (fate)
+isokaze (kancolle)
+isuzu (kancolle)
+isuzu hana
+ito noizi
+itomugi-kun
+itsumi erika
+ixy
+izayoi sakuya
+izumi konata
+izumi sagiri
+jack the ripper (fate/apocrypha)
+jakuzure nonon
+japanese crested ibis (kemono friends)
+japari symbol
+javelin (azur lane)
+jean (genshin impact)
+jeanne d'arc (alter swimsuit berserker) (fate)
+jeanne d'arc (alter) (fate)
+jeanne d'arc (fate)
+jeanne d'arc (fate/apocrypha)
+jeanne d'arc alter santa lily (fate)
+jintsuu (kancolle)
+johnny joestar
+jojo no kimyou na bouken
+jonathan joestar
+joseph joestar
+joseph joestar (young)
+jougasaki mika
+jougasaki rika
+jujutsu kaisen
+jun'you (kancolle)
+junketsu
+junko (touhou)
+k-on!
+kaban (kemono friends)
+kaburagi t. kotetsu
+kaenbyou rin
+kaenbyou rin (cat)
+kafuu chino
+kaga (azur lane)
+kaga (kancolle)
+kagamine len
+kagamine rin
+kagari atsuko
+kagerou (kancolle)
+kagerou project
+kagiyama hina
+kagura (gintama)
+kaguya-sama wa kokurasetai ~tensai-tachi no renai zunousen~
+kaito (vocaloid)
+kaku seiga
+kakyoin noriaki
+kallen stadtfeld
+kama (fate)
+kamado nezuko
+kamen rider
+kami nomi zo shiru sekai
+kamijou touma
+kamikaze (kancolle)
+kamina (ttgl)
+kamio misuzu
+kamishirasawa keine
+kamiya nao
+kamui gakupo
+kaname madoka
+kani biimu
+kanikama
+kanna kamui
+kannagi
+kanon
+kanon (kurogane knights)
+kantai collection
+kantoku
+kanzaki ranko
+kara no kyoukai
+karaagetarou
+karyl (princess connect!)
+kashima (kancolle)
+kashiwazaki sena
+kashuu kiyomitsu
+kasodani kyouko
+kasugano sakura
+kasumi (doa)
+kasumi (kancolle)
+katahira masashi
+katsuki yuuri
+katsuragi (kancolle)
+katsushika hokusai (fate)
+katyusha (girls und panzer)
+kawakaze (kancolle)
+kawashiro nitori
+kay (girls und panzer)
+kazami yuuka
+kemono friends
+kemono friends 3
+kenzaki makoto
+keqing (genshin impact)
+kiana kaslana
+kid icarus
+kijin seija
+kikuchi makoto
+kill la kill
+kill me baby
+kimetsu no yaiba
+kingdom hearts
+kinomoto sakura
+kirby
+kirby (series)
+kirigaya suguha
+kirigiri kyouko
+kirima sharo
+kirino ranmaru
+kirisame marisa
+kirisawa juuzou
+kirishima (kancolle)
+kirito
+kiryu coco
+kiryuuin satsuki
+kisaragi (kancolle)
+kisaragi chihaya
+kise yayoi
+kishin sagume
+kiso (kancolle)
+kisume
+kita high school uniform
+kitakami (kancolle)
+kitauji high school uniform
+kiyohime (fate)
+kiyoshimo (kancolle)
+kiyosumi school uniform
+kizuna ai
+kizuna ai inc.
+kizuna akari
+klee (genshin impact)
+koakuma
+kobayashi-san chi no maidragon
+kochiya sanae
+kochou shinobu
+koha-ace
+koihime musou
+koizumi hanayo
+koizumi itsuki
+kokkoro (princess connect!)
+komaeda nagito
+komeiji koishi
+komeiji satori
+kongou (kancolle)
+kono subarashii sekai ni shukufuku wo!
+konpaku youmu
+konpaku youmu (ghost)
+koshimizu sachiko
+kotobuki tsumugi
+kotomine kirei
+kou hiyoyo
+kouji (campus life)
+kousaka honoka
+kousaka kirino
+kousaka tamaki
+koyama shigeru
+kujikawa rise
+kujo jolyne
+kujo jotaro
+kuma (kancolle)
+kumano (kancolle)
+kumoi ichirin
+kunikida hanamaru
+kurodani yamame
+kuroki tomoko
+kuromorimine military uniform
+kuromorimine school uniform
+kurosawa dia
+kurosawa ruby
+kuroshio (kancolle)
+kurumi erika
+kyon
+kyonko
+kyoukaisenjou no horizon
+kyubey
+laevatein (touhou)
+laffey (azur lane)
+lana (pokemon)
+lappland (arknights)
+last order (toaru majutsu no index)
+last origin
+leaf (pokemon)
+leafa
+league of legends
+lelouch lamperouge
+leon (pokemon)
+letty whiterock
+levi (shingeki no kyojin)
+lilith aensland
+lillie (pokemon)
+lily white
+link
+little busters!
+little red riding hood
+little witch academia
+lord el-melloi ii case files
+louise francoise le blanc de la valliere
+love live!
+love live! nijigasaki high school idol club
+love live! school idol festival
+love live! school idol project
+love live! sunshine!!
+love plus
+lucina (fire emblem)
+lucky beast (kemono friends)
+lucky star
+luigi's mansion
+lumine (genshin impact)
+luna child
+lunasa prismriver
+lyn (fire emblem)
+lynette bishop
+lyra (pokemon)
+lyrica prismriver
+lyrical nanoha
+lysithea von ordelia
+m.u.g.e.n
+mabinogi
+machikado mazoku
+macross
+macross delta
+macross frontier
+made in abyss
+maekawa miku
+magi the labyrinth of magic
+magia record: mahou shoujo madoka magica gaiden
+mahou sensei negima!
+mahou shoujo lyrical nanoha
+mahou shoujo lyrical nanoha a's
+mahou shoujo lyrical nanoha strikers
+mahou shoujo lyrical nanoha vivid
+mahou shoujo madoka magica
+mahou shoujo madoka magica movie
+makigumo (kancolle)
+makima (chainsaw man)
+makinami mari illustrious
+makise kurisu
+makoto nanaya
+mallow (pokemon)
+manjuu (azur lane)
+mankanshoku mako
+maria-sama ga miteru
+maribel hearn
+marie (splatoon)
+mario
+mario (series)
+marnie (pokemon)
+maru-yu (kancolle)
+marvel
+masao
+mash kyrielight
+mash kyrielight (dangerous beast)
+matara okina
+matoi ryuuko
+matou kariya
+matou sakura
+matsunaga kouyou
+matsuno choromatsu
+matsuno ichimatsu
+matsuno jyushimatsu
+matsuno karamatsu
+matsuno osomatsu
+matsuno todomatsu
+matsuura kanan
+mattaku mousuke
+may (pokemon)
+maya (kancolle)
+mayuzumi fuyuko
+mechanization
+medicine melancholy
+medusa (fate)
+medusa (rider) (fate)
+mega man (classic)
+mega man (series)
+mega pokemon
+megami magazine
+megumin
+megurine luka
+mei (overwatch)
+meiko
+meitantei conan
+mejiro mcqueen (umamusume)
+melonbooks
+meltryllis (fate)
+meltryllis (swimsuit lancer) (fate)
+melty blood
+mercy (overwatch)
+merlin prismriver
+metal gear (series)
+metroid
+michishio (kancolle)
+midorikawa nao
+midoriya izuku
+mika (girls und panzer)
+mikage takashi
+mikasa ackerman
+mikazuki munechika
+miki sayaka
+milkpanda
+mima (touhou)
+mimura kanako
+minami (colorful palette)
+minami kotori
+minamino kanade
+minamoto no raikou (fate)
+minase iori
+minato aqua
+minecraft
+mini-hakkero
+miqo'te
+misaka mikoto
+misty (pokemon)
+misumi nagisa
+mitakihara school uniform
+miura azusa
+miyafuji yoshika
+miyako yoshika
+miyamoto frederica
+miyamoto musashi (fate)
+miyu edelfelt
+miyuki (kancolle)
+mizuhara aki
+mizuhashi parsee
+mizuki hitoshi
+mizuki makoto
+mizumoto tadashi
+mizuno ami
+mobile suit
+mobile suit gundam
+mochi au lait
+mod3 (girls' frontline)
+mogami (kancolle)
+mona (genshin impact)
+monogatari (series)
+mononobe no futo
+monster girl encyclopedia
+monster hunter (character)
+monster hunter (series)
+monster musume no iru nichijou
+mordred (fate)
+mordred (fate/apocrypha)
+mori calliope
+morichika rinnosuke
+morikubo nono
+moriya suwako
+moroboshi kirari
+morpeko
+morrigan aensland
+motoori kosuzu
+multiple persona
+murakumo (kancolle)
+murasa minamitsu
+murasaki shion
+murasame (kancolle)
+musashi (kancolle)
+mutsu (kancolle)
+mutsuki (kancolle)
+muvluv
+muvluv alternative
+my little pony
+my-hime
+myoudouin itsuki
+mysterious heroine xx (fate)
+mystia lorelei
+mythra (xenoblade)
+n (pokemon)
+nachi (kancolle)
+naga u
+nagae iku
+naganami (kancolle)
+nagato (kancolle)
+nagato yuki
+nagatsuki (kancolle)
+nagi no asukara
+nagisa kaworu
+naka (kancolle)
+nakano azusa
+nakano miku
+nakano nino
+nakano yotsuba
+nakiri ayame
+nami (one piece)
+nanairogaoka middle school uniform
+nanami chiaki
+nanamori school uniform
+nanashi (nlo)
+naoetsu high school uniform
+napoleon bonaparte (fate)
+narmaya (granblue fantasy)
+narukami yuu
+naruto
+naruto (series)
+naruto shippuuden
+natsuiro matsuri
+natsume rin
+nazrin
+nekomata okayu
+neon genesis evangelion
+neptune (neptune series)
+neptune (series)
+nero claudius (bride) (fate)
+nero claudius (fate)
+nero claudius (fate/extra)
+nero claudius (swimsuit caster) (fate)
+nessa (pokemon)
+new game!
+new super mario bros. u deluxe
+nia teppelin
+nichijou
+nico robin
+nier (series)
+nier automata
+niiko (gonnzou)
+nijisanji
+nijisanji en
+ninomae ina'nis
+nintendo
+nisemonogatari
+nishi koutarou
+nishikino maki
+nishizumi maho
+nishizumi miho
+nishizumi shiho
+nitocris (fate)
+nitroplus
+nitta minami
+niwatazumi
+noel vermillion
+non-human admiral (kancolle)
+nonna (girls und panzer)
+nontraditional miko
+northern ocean princess
+northern white-faced owl (kemono friends)
+noshiro (kancolle)
+noumi kudryavka
+nyantype
+oboro (kancolle)
+octarian
+octoling
+oda nobunaga (fate)
+oda nobunaga (koha/ace)
+official alternate costume
+ohara mari
+ohtsuki yui
+okita souji (fate)
+okita souji (koha/ace)
+older
+one piece
+one-punch man
+onikobe rin
+onozuka komachi
+ooarai military uniform
+ooarai school uniform
+ooi (kancolle)
+ookami mio
+ooyodo (kancolle)
+oozora subaru
+open fly
+orange pekoe (girls und panzer)
+ore no imouto ga konna ni kawaii wake ga nai
+oripathy lesion (arknights)
+os-tan
+oshida (girls und panzer)
+oshino shinobu
+osomatsu-kun
+osomatsu-san
+otoko no ko
+otonashi kotori
+otonokizaka school uniform
+ouma kokichi
+overlord (maruyama)
+overwatch
+p-head producer
+pageratta
+paimon (genshin impact)
+pain
+pangya
+pani poni dash!
+panty & stocking with garterbelt
+panty (psg)
+paradis military uniform
+patchouli knowledge
+pecorine (princess connect!)
+pepperoni (girls und panzer)
+perrine h. clostermann
+persona
+persona 3
+persona 3 portable
+persona 4
+persona 5
+phantasy star
+phantasy star online 2
+phantom blood
+phosphophyllite
+pikachu
+piplup
+pixiv fantasia
+plugsuit
+poke ball
+poke ball (basic)
+pokemon
+pokemon (anime)
+pokemon (classic anime)
+pokemon (creature)
+pokemon (game)
+pokemon adventures
+pokemon bw
+pokemon bw2
+pokemon dppt
+pokemon frlg
+pokemon go
+pokemon gsc
+pokemon hgss
+pokemon masters ex
+pokemon oras
+pokemon rgby
+pokemon rse
+pokemon sm
+pokemon sm (anime)
+pokemon swsh
+pokemon xy
+pola (kancolle)
+polos crown
+poptepipic
+power suit
+precure
+pretty (series)
+princess connect!
+princess king boo
+princess peach
+princess zelda
+prinz eugen (azur lane)
+prinz eugen (kancolle)
+pripara
+producer (idolmaster cinderella girls anime)
+producer (idolmaster)
+project diva (series)
+prone bone
+puchimasu!
+purple heart
+puyopuyo
+puzzle & dragons
+pyonta
+pyra (xenoblade)
+qing guanmao
+queen's blade
+rabbit house uniform
+ragna the bloodedge
+ragnarok online
+raiden shogun
+raihan (pokemon)
+raimon
+raising heart
+ram (re:zero)
+ranguage
+ranka lee
+ranma 1/2
+rappa (rappaya)
+re-class battleship
+re:zero kara hajimeru isekai seikatsu
+rebecca (keinelove)
+rebuild of evangelion
+red (pokemon)
+rei no himo
+reisalin stout
+reisen udongein inaba
+reiuji utsuho
+reizei mako
+rem (re:zero)
+remilia scarlet
+rensouhou-chan
+rensouhou-kun
+resident evil
+retrofit (azur lane)
+reverse trap
+rice shower (umamusume)
+rigging
+ro-500 (kancolle)
+robin (fire emblem)
+robin (fire emblem) (female)
+rod of remorse
+role reversal
+rosa (pokemon)
+rosehip (girls und panzer)
+roswaal mansion maid uniform
+rotom
+rowlet
+rozen maiden
+ruby rose
+rudder footwear
+rumia
+ruu (tksymkw)
+rwby
+ryougi shiki
+ryouou school uniform
+ryuuguu rena
+ryuujou (kancolle)
+ryuuou no oshigoto!
+saber
+saber alter
+saber lily
+saenai heroine no sodatekata
+sagisawa fumika
+saigyouji yuyuko
+saihara shuuichi
+sailor moon
+sailor senshi uniform
+sakamoto mio
+sakata gintoki
+saki
+saki achiga-hen
+sakugawa school uniform
+sakura kyouko
+sakura miko
+sakura miku
+sakuragaoka high school uniform
+sakurauchi riko
+samidare (kancolle)
+samurai spirits
+samus aran
+sanya v. litvyak
+saotome ranma
+saratoga (kancolle)
+saten ruiko
+satonaka chie
+satsuki (kancolle)
+sayonara zetsubou sensei
+sayori (neko works)
+sazanami (kancolle)
+scarlet devil mansion
+scathach (fate)
+scissor blade
+seaport princess
+seiken densetsu
+seiken densetsu 3
+seiran (touhou)
+sekaiju no meikyuu
+sekibanki
+selene (pokemon)
+sendai (kancolle)
+sendai hakurei no miko
+senjou no valkyria (series)
+senjougahara hitagi
+senketsu
+senki zesshou symphogear
+sennen sensou aigis
+senpai ga uzai kouhai no hanashi
+senran kagura
+senran kagura shoujo-tachi no shin'ei
+serena (pokemon)
+serval (kemono friends)
+sesshouin kiara
+shadowverse
+shakugan no shana
+shameimaru aya
+shana
+shanghai doll
+sheryl nome
+shibuya rin
+shigure (kancolle)
+shijou takane
+shiki eiki
+shikinami (kancolle)
+shima rin
+shimada arisu
+shimakaze (kancolle)
+shimakaze (kancolle) (cosplay)
+shimamura uzuki
+shimazaki mujirushi
+shin megami tensei
+shingeki no bahamut
+shingeki no kyojin
+shinjou akane
+shinki (touhou)
+shinku
+shino (ponjiyuusu)
+shinrabanshou
+shinryaku! ikamusume
+shiny pokemon
+shiomi kotone
+shiomi syuko
+shirai kuroko
+shirakami fubuki
+shiranui (kancolle)
+shiranui flare
+shiranui mai
+shirasaka koume
+shiratsuyu (kancolle)
+shirayuki (kancolle)
+shirogane naoto
+shirogane noel
+shiseki hirame
+shishiro botan
+shoebill (kemono friends)
+shokuhou misaki
+shoukaku (kancolle)
+shuten douji (fate)
+shuuchiin academy uniform
+signum
+simon (ttgl)
+sinoalice
+sinon
+sirius (azur lane)
+skadi (arknights)
+skullgirls
+slugbox
+smile precure!
+snk
+sofra
+soga no tojiko
+son goku
+sonic (series)
+sonoda umi
+sonozaki mion
+sonozaki shion
+sorcerer's sutra scroll
+soul eater
+soul gem
+soulcalibur
+souryuu (kancolle)
+souryuu asuka langley
+souseiseki
+spear the gungnir
+spice and wolf
+spider-man (series)
+splatoon (series)
+splatoon 1
+splatoon 2
+springfield (girls' frontline)
+ssss.gridman
+st. gloriana's military uniform
+st. gloriana's school uniform
+stand (jojo)
+star ocean
+star sapphire
+star twinkle precure
+star wars
+stardust crusaders
+starter pokemon trio
+steel ball run
+steins;gate
+stocking (psg)
+stone ocean
+street fighter
+street fighter iv (series)
+street fighter v
+street fighter zero (series)
+strike witches
+striker unit
+string of fate
+suigintou
+suiseiseki
+suite precure
+sukuna shinmyoumaru
+sunny milk
+super crown
+super robot wars
+super saiyan
+super smash bros.
+super sonico
+suzuhira hiro
+suzukaze (kancolle)
+suzumiya haruhi
+suzumiya haruhi no shoushitsu
+suzumiya haruhi no yuuutsu
+suzuya (kancolle)
+sword art online
+sword art online: code register
+sword girls
+sword of hisou
+t-head admiral
+tachibana arisu
+tachibana hibiki (symphogear)
+taigei (kancolle)
+taihou (azur lane)
+taihou (kancolle)
+taimanin (series)
+tainaka ritsu
+taisa (kari)
+takagaki kaede
+takamachi nanoha
+takami chika
+takanashi kiara
+takanashi rikka
+takao (azur lane)
+takao (kancolle)
+takara miyuki
+takarada rikka
+takatsuki yayoi
+takebe saori
+tales of (series)
+tales of graces
+tales of the abyss
+tales of vesperia
+tales of xillia
+tama (kancolle)
+tamako market
+tamamo (fate)
+tamamo cat (fate)
+tamamo no mae (fate/extra)
+tamamo no mae (swimsuit lancer) (fate)
+tani takeshi
+tartaglia (genshin impact)
+tatara kogasa
+tatsumaki
+tatsumi kanji
+tatsuta (kancolle)
+team rocket
+tedeza rize
+tekken
+tengen toppa gurren lagann
+tenryuu (kancolle)
+tenshi (angel beats!)
+teruzuki (kancolle)
+texas (arknights)
+the king of fighters
+the legend of zelda
+the legend of zelda: breath of the wild
+the legend of zelda: ocarina of time
+the legend of zelda: twilight princess
+three-dimensional maneuver gear
+tifa lockhart
+tiger & bunny
+tina branford
+tippy (gochiusa)
+to heart
+to heart 2
+to love-ru
+to love-ru darkness
+toaru kagaku no railgun
+toaru majutsu no index
+tohsaka rin
+tokai teio (umamusume)
+tokitsukaze (kancolle)
+tokiwadai school uniform
+tokoyami towa
+tokyo 7th sisters
+tokyo afterschool summoners
+tokyo ghoul
+tomoe gozen (fate)
+tomoe mami
+tomose shunsaku
+tonda
+tone (kancolle)
+tony taka
+toradora!
+toramaru shou
+toranoana
+toshinou kyouko
+touhou
+touhou (pc-98)
+touhou tag dream
+toujou nozomi
+touken ranbu
+toyosatomimi no miko
+tracen school uniform
+tracer (overwatch)
+trait connection
+transformers
+tsuda nanafushi
+tsukihime
+tsukikage yuri
+tsukino mito
+tsukino usagi
+tsukudani (coke-buta)
+tsunako
+tsundere
+tsushima yoshiko
+tukiwani
+u-511 (kancolle)
+uchiha sasuke
+ueyama michirou
+uiharu kazari
+ujimatsu chiya
+ultimate madoka
+umamusume
+umineko no naku koro ni
+ump45 (girls' frontline)
+ump9 (girls' frontline)
+undertale
+unicorn (azur lane)
+unryuu (kancolle)
+unzan
+urakaze (kancolle)
+uranohoshi school uniform
+uraraka ochako
+uruha rushia
+urusei yatsura
+usada pekora
+usami renko
+usami sumireko
+ushio (kancolle)
+ushiromiya ange
+ushiromiya battler
+ushiwakamaru (fate)
+utau
+utawarerumono
+uzuki (kancolle)
+uzumaki naruto
+v-fin
+vampire (game)
+vastaya
+venti (genshin impact)
+vento aureo
+verniy (kancolle)
+viktor nikiforov
+virtual youtuber
+vision (genshin impact)
+vita
+vivio
+vocaloid
+vocaloid append
+voiceroid
+voyakiloid
+wa (genryusui)
+wa2000 (girls' frontline)
+wakasagihime
+warcraft
+warship girls r
+warspite (kancolle)
+warugaki (sk-ii)
+watanabe you
+watashi ga motenai no wa dou kangaetemo omaera ga warui!
+watatsuki no yorihime
+watson amelia
+waver velvet
+weiss schnee
+wild arms
+wo-class aircraft carrier
+working!!
+world witches series
+wriggle nightbug
+xenoblade chronicles (series)
+xenoblade chronicles 2
+xenosaga
+xiao (genshin impact)
+yaegashi nan
+yagami hayate
+yagokoro eirin
+yahagi (kancolle)
+yahari ore no seishun lovecome wa machigatteiru.
+yakumo ran
+yakumo yukari
+yamakaze (kancolle)
+yamamoto souichirou
+yamashiro (kancolle)
+yamato (kancolle)
+yandere
+yang guifei (fate)
+yang xiao long
+yano toshinori
+yasaka kanako
+yasogami school uniform
+yayoi (kancolle)
+yazawa nico
+yes! precure 5
+ymir (shingeki no kyojin)
+yohane
+yoko littner
+yokochou
+yorha no. 2 type b
+yorigami jo'on
+yorigami shion
+yoshida yuuko (machikado mazoku)
+yoshikawa chinatsu
+yotsubato!
+youkai watch
+younger
+yowane haku
+yu mei-ren (fate)
+yu-gi-oh!
+yu-gi-oh! duel monsters
+yu-gi-oh! gx
+yua (checkmate)
+yuki miku
+yukihana lamy
+yukikaze (kancolle)
+yukine chris
+yukkuri shiteitte ne
+yume nikki
+yumemi riamu
+yuno (hidamari sketch)
+yura (kancolle)
+yuri lowell
+yuri!!! on ice
+yuru yuri
+yurucamp
+yuubari (kancolle)
+yuudachi (kancolle)
+yuugumo (kancolle)
+yuuki makoto
+yuureidoushi (yuurei6214)
+yuzuki yukari
+yuzuriha inori
+z1 leberecht maass (kancolle)
+z3 max schultz (kancolle)
+zero no tsukaima
+zero suit
+zero two (darling in the franxx)
+zeta gundam
+zhongli (genshin impact)
+zombie land saga
+zounose
+zuihou (kancolle)
+zuikaku (kancolle)
+
+[Fantasy and sci-fi]
+alien
+android
+angel
+angel wings
+animal ear fluff
+animal ears
+animal hands
+animal nose
+arm cannon
+arthropod girl
+asymmetrical wings
+aura
+bat wings
+bear ears
+bikini armor
+bird tail
+bird wings
+black horns
+black sclera
+black skin
+black tail
+black wings
+blue fire
+blue skin
+blue wings
+body fur
+body markings
+broken horn
+broom riding
+butterfly wings
+cat boy
+cat ears
+cat girl
+cat paws
+cat tail
+chest jewel
+claws
+clone
+colored sclera
+colored skin
+colored tongue
+command spell
+corruption
+cow ears
+cow girl
+cow horns
+cow tail
+creature
+creature and personification
+crescent facial mark
+curled horns
+cyberpunk
+cyborg
+cyclops
+dark elf
+death
+demon
+demon boy
+demon girl
+demon horns
+demon tail
+demon wings
+detached wings
+disembodied head
+disembodied limb
+dog ears
+dog girl
+dog tail
+doll joints
+dragon
+dragon girl
+dragon horns
+dragon tail
+dragon wings
+ears down
+ears through headwear
+eastern dragon
+electricity
+elf
+empty eyes
+energy
+energy ball
+energy gun
+energy sword
+extra arms
+extra ears
+extra eyes
+eyeball
+facial mark
+fairy
+fairy wings
+fang
+fang out
+fangs
+fantasy
+feather hair
+feathered wings
+fins
+fish tail
+flaming eye
+forehead jewel
+forehead mark
+fox ears
+fox girl
+fox tail
+furry
+furry female
+furry male
+furry with non-furry
+ghost
+ghost tail
+giant
+giantess
+glowing
+glowing eye
+glowing eyes
+glowing sword
+glowing weapon
+goat horns
+gradient eyes
+green skin
+grey skin
+hagoromo
+halo
+harpy
+head fins
+head wings
+headgear
+heart-shaped pupils
+hitodama
+holding staff
+holding wand
+horizontal pupils
+horn bow
+horn ornament
+horn ribbon
+horns
+horse ears
+horse girl
+horse tail
+humanoid robot
+hypnosis
+ice wings
+jackal ears
+jiangshi
+joints
+karakasa obake
+kemonomimi mode
+kitsune
+knight
+kyuubi
+lamia
+large tail
+lion ears
+lion girl
+lion tail
+long pointy ears
+low wings
+magic
+magic circle
+magical girl
+magical musket
+mecha
+mecha musume
+mechanical arms
+mechanical halo
+mechanical legs
+mechanical parts
+mechanical wings
+mermaid
+mind control
+mini wings
+miniboy
+minigirl
+monkey tail
+monster
+monster boy
+monster girl
+mouse ears
+mouse girl
+mouse tail
+multicolored eyes
+multicolored skin
+multiple tails
+multiple wings
+nekomata
+no wings
+one-eyed
+oni
+oni horns
+orc
+personification
+pink skin
+pointy ears
+power armor
+purple skin
+purple wings
+quad tails
+rabbit ears
+rabbit girl
+rabbit tail
+raccoon ears
+raccoon girl
+raccoon tail
+red horns
+red skin
+red wings
+ringed eyes
+robot
+robot ears
+robot joints
+scales
+science fiction
+shark girl
+shark tail
+sheep ears
+sheep girl
+sheep horns
+shikigami
+single horn
+single mechanical arm
+single wing
+skeleton
+skin fang
+skin-covered horns
+slime (substance)
+slime girl
+slit pupils
+snake tail
+spell card
+spider girl
+spread wings
+squirrel ears
+squirrel tail
+staff
+standing on liquid
+star-shaped pupils
+striped tail
+suction cups
+super robot
+superhero
+symbol-shaped pupils
+tail
+tail bell
+tail bow
+tail ornament
+tail raised
+tail ribbon
+tail wagging
+taur
+tentacle hair
+tentacles
+third eye
+tiger ears
+tiger tail
+transformation
+tri tails
+triangular headpiece
+two tails
+two-tone skin
+ufo
+vampire
+wand
+whisker markings
+white pupils
+white wings
+winged arms
+wings
+witch
+wolf ears
+wolf girl
+wolf tail
+yellow sclera
+youkai
+zombie
+zombie pose
+
+[R18]
+69
+after anal
+after fellatio
+after sex
+after vaginal
+against glass
+ahegao
+anal
+anal beads
+anal fingering
+anal object insertion
+anal tail
+anus
+anus peek
+areola slip
+asphyxiation
+ass grab
+assisted exposure
+asymmetrical docking
+ball gag
+bandaid on pussy
+bandaids on nipples
+bar censor
+bdsm
+bestiality
+between breasts
+between legs
+between thighs
+bikini aside
+bikini lift
+bikini pull
+bit gag
+black blindfold
+blindfold
+body writing
+bodypaint
+bondage
+bottomless
+bound
+bound arms
+bound legs
+bound wrists
+boy on top
+bra lift
+bra peek
+bra pull
+bra removed
+breast bondage
+breast grab
+breast slip
+breast squeeze
+breast sucking
+breastless clothes
+breasts outside
+bukkake
+bulge
+butt crack
+butt plug
+cameltoe
+caught
+censored
+cervix
+chained
+cleft of venus
+clitoral hood
+clitoral stimulation
+clitoris
+clothed female nude male
+clothed male nude female
+clothed masturbation
+clothed sex
+clothes lift
+clothes removed
+clothing aside
+colored pubic hair
+completely nude
+condom
+condom in mouth
+condom on penis
+condom wrapper
+convenient arm
+convenient censoring
+convenient leg
+corpse
+covering
+covering breasts
+covering crotch
+covering nipples
+cowgirl position
+cross-section
+crossed bandaids
+crotch rope
+crotch rub
+crotchless
+crotchless panties
+cum
+cum in ass
+cum in mouth
+cum in pussy
+cum on ass
+cum on body
+cum on boy
+cum on breasts
+cum on clothes
+cum on hair
+cum on stomach
+cum on tongue
+cum pool
+cum string
+cum while penetrated
+cumdrip
+cunnilingus
+dark nipples
+deep penetration
+deepthroat
+defloration
+dildo
+disembodied penis
+doggystyle
+dominatrix
+double handjob
+double penetration
+downblouse
+dress lift
+egg vibrator
+ejaculation
+erection
+erection under clothes
+exhibitionism
+facial
+fat mons
+fellatio
+female ejaculation
+female masturbation
+female orgasm
+female pervert
+female pubic hair
+femdom
+ffm threesome
+fingering
+flaccid
+flashing
+folded
+food on body
+footjob
+foreskin
+fucked silly
+futa with female
+futa with male
+futanari
+gag
+gagged
+gangbang
+gaping
+girl on top
+girl sandwich
+grabbing another's ass
+grabbing from behind
+grabbing own ass
+grabbing own breast
+grinding
+groping
+group sex
+guro
+hair censor
+hair over breasts
+hand between legs
+hand in panties
+hand on ass
+hand under clothes
+handcuffs
+handjob
+happy sex
+have to pee
+heart censor
+heart pasties
+huge nipples
+huge penis
+imminent penetration
+imminent rape
+imminent vaginal
+implied futanari
+implied sex
+improvised gag
+incest
+internal cumshot
+interspecies
+inverted nipples
+irrumatio
+labia
+lactation
+large areolae
+large penis
+leg lock
+leotard aside
+licking penis
+lifted by another
+lifted by self
+light areolae
+m legs
+maebari
+male masturbation
+male pubic hair
+masturbation
+mating press
+missionary
+mmf threesome
+moaning
+mosaic censoring
+multiple fellatio
+multiple penises
+naked apron
+naked cape
+naked coat
+naked ribbon
+naked sheet
+naked shirt
+naked sweater
+naked towel
+netorare
+nipple piercing
+nipple rings
+nipple slip
+nipple tweak
+nipples
+no nipples
+no panties
+no pussy
+novelty censor
+nude
+nude cover
+nude filter
+object insertion
+one breast out
+oppai loli
+oral
+orgasm
+orgy
+out-of-frame censoring
+overflow
+paizuri
+paizuri under clothes
+panties around one leg
+panties aside
+panties removed
+panty peek
+panty pull
+pantyshot
+partially undressed
+partially visible vulva
+pasties
+pee
+peeing
+peeing self
+penis
+penis awe
+penis on face
+pervert
+phimosis
+pointless censoring
+pov crotch
+precum
+presenting
+projectile cum
+prostitution
+pubic hair
+pubic hair peek
+pubic tattoo
+public indecency
+public nudity
+puffy nipples
+pussy
+pussy juice
+pussy juice stain
+pussy juice trail
+pussy peek
+rape
+red rope
+remote control vibrator
+restrained
+reverse bunnysuit
+reverse cowgirl position
+reverse outfit
+reverse suspended congress
+ribbon bondage
+riding crop
+sandwiched
+self fondle
+selfcest
+sex
+sex from behind
+sex toy
+sexually suggestive
+shackles
+sheet grab
+shibari
+shibari over clothes
+shirt lift
+sitting on face
+skirt lift
+slave
+spanked
+spitroast
+spread anus
+spread ass
+spread pussy
+squatting cowgirl position
+standing sex
+steam censor
+stomach bulge
+straitjacket
+strangling
+suggestive fluid
+suspension
+sweater lift
+swimsuit aside
+swimsuit pull
+symmetrical docking
+tape gag
+tentacle sex
+testicles
+thigh sex
+threesome
+top-down bottom-up
+topless
+torogao
+tribadism
+twitching penis
+two-footed footjob
+uncensored
+untied bikini
+untied panties
+upright straddle
+upskirt
+urethra
+used condom
+uterus
+vaginal
+vaginal object insertion
+veiny penis
+vibrator
+vibrator under clothes
+walk-in
+wardrobe malfunction
+wedgie
+wet panties
+whip
+wide spread legs
+wind lift
+x-ray
+you gonna get raped
