@@ -11,16 +11,20 @@ window state in your home folder, and it never connects to the internet.
 ## Features
 
 - **Browse** every photo and video in the vault, or folder by folder, sorted
-  by date taken, date created or file name, oldest or newest first.
+  by date taken, date created, file name, video length or at random, either
+  way round. Every view opens where you left it.
 - **Albums, favorites and smart albums.** Smart albums pick their photos from
-  tag rules: include or exclude tags, match any or all.
+  tag rules: include or exclude tags, match any or all. Drag albums into the
+  order you want, duplicate them, and sort each one its own way.
 - **Automatic tags from [JoyTag](https://github.com/fpgaminer/joytag)**, which
   names what's in a picture (5,813 tags) and runs on your Mac, from the
   thumbnails PhotoVault already keeps. Tags are kept in the vault's catalog:
   your photos are never rewritten. Tags are grouped under everyday names in an
   editable text file in the vault (`.Tag Groups.txt`).
-- **A viewer** with zoom, the photo's details (file, dates, dimensions, the
-  keywords already in it, its tags) and video playback.
+- **A viewer** with zoom for photos and videos, the photo's details (file,
+  dates, dimensions, the keywords already in it, its tags) and video playback
+  — with Repeat, Random and Play Next, slideshows, and one playback speed for
+  every video.
 - **Rotate JPEGs** without re-encoding: only the orientation value changes, so
   every other byte, and the photo's dates, stay as they were.
 - **Trash** with Put Back. Files leave the disk only when you empty it.
@@ -43,7 +47,9 @@ window state in your home folder, and it never connects to the internet.
 3. Choose one:
    - **Create a New Vault** — a new disk image, with PhotoVault, JoyTag and an
      empty Photos folder. Choose its name, where to save it, and the most it can
-     hold (it only takes the space its photos use).
+     hold (it only takes the space its photos use). It can be protected with a
+     password: then nobody can open it without one — and a forgotten password
+     can't be recovered.
    - **Install on an Existing Vault** — puts this version of PhotoVault on a
      vault you have. Its photos, albums and tags stay as they are.
 

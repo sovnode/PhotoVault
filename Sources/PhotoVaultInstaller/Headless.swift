@@ -18,6 +18,8 @@ enum Headless {
 
           --size <size>       the most the new vault can hold, as hdiutil reads it: 500g, 1t
           --allow-older       install over a newer PhotoVault
+          --password-stdin    a password, read from standard input: protects a new
+                              vault, or opens a protected one to install on it
           --mount-root <dir>  mount disk images there, out of Finder's sidebar
         """
         #if DEBUG
@@ -48,6 +50,7 @@ enum Headless {
 
         var values: [String: String] = [:]
         var allowOlder = false
+        var passwordFromStdin = false
         var i = 0
         while i < args.count {
             let arg = args[i]
@@ -58,6 +61,9 @@ enum Headless {
             } else if arg == "--allow-older" {
                 allowOlder = true
                 i += 1
+            } else if arg == "--password-stdin" {
+                passwordFromStdin = true
+                i += 1
             } else {
                 return fail("unknown argument \(arg)\n\n\(usage)")
             }
@@ -65,10 +71,15 @@ enum Headless {
         guard let value = values[command] else { return fail(usage) }
         let target = URL(fileURLWithPath: value)
         let mountRoot = values["--mount-root"].map { URL(fileURLWithPath: $0) }
+        // Read, used and dropped; never printed.
+        let password: String? = passwordFromStdin
+            ? String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self)
+                .trimmingCharacters(in: .newlines)
+            : nil
 
         do {
             if command == "--inspect" {
-                let (vault, mounted) = try VaultSetup.open(target, mountRoot: mountRoot)
+                let (vault, mounted) = try VaultSetup.open(target, mountRoot: mountRoot, password: password)
                 describe(vault)
                 if mounted { print("(opened to look; it's still open)") }
                 return 0
@@ -90,15 +101,16 @@ enum Headless {
                 print("PhotoVault Installer \(payload.version): creating “\(name)” in \(target.deletingLastPathComponent().path)")
                 let report = try VaultSetup.create(name: name, in: target.deletingLastPathComponent(),
                                                    size: values["--size"] ?? VaultSetup.defaultSize, payload: payload,
-                                                   mountRoot: mountRoot, progress: say)
+                                                   password: password, mountRoot: mountRoot, progress: say)
                 describe(report)
             } else {
-                let (vault, _) = try VaultSetup.open(target, mountRoot: mountRoot)
+                let (vault, _) = try VaultSetup.open(target, mountRoot: mountRoot, password: password)
                 if let installed = vault.installedVersion, VaultSetup.compare(installed, payload.version) > 0, !allowOlder {
                     throw SetupError("The vault has PhotoVault \(installed), newer than \(payload.version). Add --allow-older to install the older version.")
                 }
                 print("PhotoVault Installer \(payload.version): installing on “\(vault.name)”")
-                let report = try VaultSetup.install(into: target, payload: payload, mountRoot: mountRoot, progress: say)
+                let report = try VaultSetup.install(into: target, payload: payload, password: password,
+                                                    mountRoot: mountRoot, progress: say)
                 describe(report)
             }
             return 0
@@ -189,6 +201,15 @@ enum Snapshots {
             ("1-create", false, { _ in }),
             ("1-create-dark", true, { _ in }),
             ("2-create-bad-name", false, { $0.name = "Family/Photos" }),
+            ("2-create-protected", false, { m in
+                m.protect = true
+                m.password = "secret"
+                m.confirmation = "secret"
+            }),
+            ("3-install-locked", false, { m in
+                m.mode = .install
+                m.locked = home.appendingPathComponent("Family Photos.sparsebundle")
+            }),
             ("3-install-none-open", false, { $0.mode = .install }),
             ("4-install-update", false, install(older)),
             ("4-install-update-dark", true, install(older)),

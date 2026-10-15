@@ -9,6 +9,7 @@ struct PhotoVaultApp: App {
     @StateObject private var model = LibraryModel()
 
     init() {
+        _ = SmokeHooks.launched
         // The first of the app's code to run: before NSApplication finishes
         // launching, and so before SwiftUI creates — and AppKit saves — any window.
         PreferencesGuard.install()
@@ -49,6 +50,10 @@ struct PhotoVaultApp: App {
             // No Share menu: share extensions run out-of-process and copy their
             // input off the volume. No Print: CUPS spools to /var/spool/cups.
             CommandGroup(replacing: .printItem) {}
+            CommandGroup(after: .sidebar) {
+                Toggle("Show Whole Photos", isOn: Binding(get: { model.showWholePhotos },
+                                                          set: { _ in model.toggleWholePhotos() }))
+            }
             CommandMenu("Image") {
                 // ⌘L / ⌘R as in Preview. These and the rest of this menu act on
                 // the open photo in the viewer, or on the grid selection.
@@ -157,6 +162,7 @@ struct RootView: View {
             }
         }
         .background(WindowChrome(viewing: model.viewing != nil, savedFrame: model.savedWindowFrame))
+        .sheet(item: $model.newAlbumRequest) { request in NewAlbumForPhotosSheet(request: request) }
         .alert("PhotoVault", isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.errorMessage = nil } }
@@ -171,6 +177,52 @@ struct RootView: View {
 /// Test-only behaviour for `Scripts/smoke-test.sh`. Every hook is inert unless
 /// its environment variable is set, which only the smoke test does.
 enum SmokeHooks {
+    /// `PHOTOVAULT_SMOKE_TIMING=1`: seconds since launch at each milestone of
+    /// opening a vault, for measuring how long it takes.
+    static let launched = Date()
+    static func mark(_ event: String) {
+        guard ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_TIMING"] == "1" else { return }
+        print(String(format: "smoke: %.2f s %@", Date().timeIntervalSince(launched), event))
+        fflush(stdout)
+    }
+
+    /// Smoke test only: zoom the video on screen, or say how far it's zoomed,
+    /// as a pinch would — synthetic gestures need Accessibility permission.
+    static func watchVideoZoom(_ surface: VideoSurface.Coordinator) {
+        guard ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_PLAYBACK"] == "1" else { return }
+        let center = NotificationCenter.default
+        surface.observers.append(center.addObserver(forName: .smokeZoomVideo, object: nil, queue: .main) { [weak surface] note in
+            MainActor.assumeIsolated {
+                if let zoom = (note.object as? NSNumber).map({ CGFloat($0.doubleValue) }) {
+                    surface?.view?.magnification = zoom
+                } else {
+                    say(String(format: "video zoom %.1f", surface?.view?.magnification ?? 0))
+                }
+            }
+        })
+    }
+
+    /// A line for the smoke test's log, only when a smoke hook is running.
+    static func say(_ line: String) {
+        guard ProcessInfo.processInfo.environment.keys.contains(where: { $0.hasPrefix("PHOTOVAULT_SMOKE_") }) else { return }
+        print("smoke: \(line)")
+        fflush(stdout)
+    }
+
+    /// `PHOTOVAULT_SMOKE_SCREEN=2`: the window opens centred on that display
+    /// (1 is the main one), so tests running while someone works on the main
+    /// display stay out of their way.
+    static func placeOnRequestedScreen(_ window: NSWindow) {
+        guard let n = ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_SCREEN"].flatMap(Int.init),
+              n >= 1, n <= NSScreen.screens.count else { return }
+        let area = NSScreen.screens[n - 1].visibleFrame
+        var frame = window.frame
+        frame.size.width = min(frame.width, area.width)
+        frame.size.height = min(frame.height, area.height)
+        frame.origin = NSPoint(x: area.midX - frame.width / 2, y: area.midY - frame.height / 2)
+        window.setFrame(frame, display: true)
+    }
+
     /// `PHOTOVAULT_SMOKE_RESIZE=1`: everything known to make AppKit or SwiftUI
     /// save to `~/Library/Preferences` — resizing the window, dragging the
     /// sidebar divider, the window becoming active — plus a value written
@@ -258,6 +310,7 @@ struct WindowChrome: NSViewRepresentable {
         var configured = false
         var lastViewing: Bool?
         var frameRestored = false
+        var placed = false
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -295,6 +348,21 @@ struct WindowChrome: NSViewRepresentable {
         if !state.frameRestored, let savedFrame {
             state.frameRestored = true
             restore(window, to: savedFrame)
+            SmokeHooks.placeOnRequestedScreen(window)
+        }
+        if !state.placed {
+            state.placed = true
+            SmokeHooks.placeOnRequestedScreen(window)
+        }
+
+        // Hiding the toolbar for the viewer brings back a plain title bar,
+        // grey and showing the view's name across the top of the photo. Put
+        // the transparent, title-less one back — now and once SwiftUI has
+        // finished hiding the toolbar. Only when it differs: setting it
+        // unconditionally on every update is how the earlier loop began.
+        Self.keepTitlebarClear(window)
+        if state.lastViewing != viewing {
+            DispatchQueue.main.async { Self.keepTitlebarClear(window) }
         }
 
         guard state.lastViewing != viewing else { return }
@@ -308,6 +376,12 @@ struct WindowChrome: NSViewRepresentable {
         for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             window.standardWindowButton(button)?.isHidden = hideButtons
         }
+    }
+
+    static func keepTitlebarClear(_ window: NSWindow) {
+        if window.titleVisibility != .hidden { window.titleVisibility = .hidden }
+        if !window.titlebarAppearsTransparent { window.titlebarAppearsTransparent = true }
+        if !window.styleMask.contains(.fullSizeContentView) { window.styleMask.insert(.fullSizeContentView) }
     }
 
     /// Nothing may be written outside the vault. Window tabs would save

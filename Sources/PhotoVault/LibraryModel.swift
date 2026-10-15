@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import IOKit.pwr_mgt
 import AppKit
 import CoreGraphics
 import PhotoVaultCore
@@ -55,23 +56,116 @@ final class LibraryModel: ObservableObject {
 
     @Published var scope: LibraryScope = .all {
         didSet {
+            // Leaving a view: its place is written now, not after the delay
+            // that scrolling waits for.
+            savePlace(oldValue.placeKey(filter))
+            restoringPlace = true
             clearSelection()
             if case .smart = scope {} else { editingFilter = false }
             Task { await reload() }
         }
     }
-    @Published var filter: MediaFilter = .all { didSet { clearSelection(); Task { await reload() } } }
+    /// All, Photos or Videos. Each keeps its own place in every view, so
+    /// filtering and coming back to All finds the place where it was.
+    @Published var filter: MediaFilter = .all {
+        didSet {
+            savePlace(scope.placeKey(oldValue))
+            restoringPlace = true
+            clearSelection()
+            Task { await reload() }
+        }
+    }
     @Published var viewing: PhotoItem? {
         didSet {
             // Closing the viewer lands on the photo last shown, wherever the
             // arrow keys took it, not wherever the grid was scrolled before.
             if viewing == nil, let last = oldValue { scrollRequest = ScrollRequest(id: last.id) }
+            // Closing it also ends a slideshow, so one never starts by itself
+            // the next time a photo is opened.
+            if viewing == nil {
+                if nextOn { nextOn = false }
+                if randomOn { randomOn = false }
+            }
+            updateSlideshowAssertion()
+        }
+    }
+
+    // MARK: - Repeat, Random, Play Next
+
+    /// Loops the video on screen; a slideshow that reaches the end starts again.
+    @Published var repeatOn = false
+    /// Moves on to a random item when a video ends, or after a photo's time.
+    @Published var randomOn = false { didSet { if randomOn { shuffleQueue = [] }; updateSlideshowAssertion() } }
+    /// Moves on to the next item when a video ends, or after a photo's time.
+    @Published var nextOn = false { didSet { updateSlideshowAssertion() } }
+    /// Seconds each photo stays in a slideshow. Saved per vault.
+    @Published private(set) var slideInterval: Double = 5
+    static let slideIntervals: [Double] = [2, 3, 5, 10, 20, 30]
+    /// One playback speed for every video. Saved per vault.
+    private(set) var videoSpeed: Float = 1
+    /// Items Random hasn't shown yet, in the order it will show them.
+    private var shuffleQueue: [Int64] = []
+    private var displayAwake: IOPMAssertionID = 0
+    /// How many times Play Next or Random has moved on. For the smoke test.
+    private var smokeMoves = 0
+
+    var slideshowOn: Bool { nextOn || randomOn }
+
+    func setSlideInterval(_ seconds: Double) {
+        slideInterval = seconds
+        Task { await store?.setSetting("viewer.interval", String(seconds)) }
+    }
+
+    func setVideoSpeed(_ speed: Float) {
+        guard abs(speed - videoSpeed) > 0.001 else { return }
+        videoSpeed = speed
+        Task { await store?.setSetting("video.speed", String(speed)) }
+    }
+
+    /// Play Next and Random: the item after the one open, or a random one not
+    /// shown yet. Random reshuffles once every item has been shown; Play Next
+    /// stops at the end unless Repeat is on. Returns whether it moved.
+    @discardableResult
+    func advance() -> Bool {
+        guard let open = viewing, !items.isEmpty else { return false }
+        if randomOn {
+            if shuffleQueue.isEmpty { shuffleQueue = items.map(\.id).filter { $0 != open.id }.shuffled() }
+            while let id = shuffleQueue.popLast() {
+                if let next = items.first(where: { $0.id == id }) { return show(next) }
+            }
+            return false
+        }
+        guard let i = items.firstIndex(where: { $0.id == open.id }) else { return false }
+        if i + 1 < items.count { return show(items[i + 1]) }
+        if repeatOn, let first = items.first, first.id != open.id { return show(first) }
+        return false
+    }
+
+    private func show(_ item: PhotoItem) -> Bool {
+        smokeMoves += 1
+        lastStep = 1
+        viewing = item
+        select(only: item.id)
+        return true
+    }
+
+    /// The display stays awake while a slideshow runs — a power assertion,
+    /// which writes nothing to disk.
+    private func updateSlideshowAssertion() {
+        let wanted = slideshowOn && viewing != nil
+        if wanted, displayAwake == 0 {
+            IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
+                                        IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                                        "PhotoVault slideshow" as CFString, &displayAwake)
+        } else if !wanted, displayAwake != 0 {
+            IOPMAssertionRelease(displayAwake)
+            displayAwake = 0
         }
     }
 
     /// The current view's sort, chosen in the toolbar: the library's — All
-    /// Media, its folders, Favorites and the Trash share one — or a smart
-    /// album's own. Nil in an album, which keeps its own order.
+    /// Media, its folders, Favorites and the Trash share one — or an album's
+    /// or smart album's own.
     @Published private(set) var sort: SortSetting?
     /// The folders under Photos/ that hold photos, for the sidebar.
     @Published private(set) var folderTree: FolderNode?
@@ -127,9 +221,91 @@ final class LibraryModel: ObservableObject {
     /// is distinct, so asking for the same photo twice still scrolls.
     struct ScrollRequest: Equatable {
         let id: Int64
+        var anchor: UnitPoint = .center
+        /// Returning to a view's remembered place, rather than revealing a photo.
+        var restoresPlace = false
         let token = UUID()
     }
     @Published var scrollRequest: ScrollRequest?
+
+    /// Each view's place: the photo at the top of the screen when it was last
+    /// looked at, by `LibraryScope.placeKey`. Kept in the vault's catalog.
+    private var places: [String: Int64] = [:]
+    private var placeSave: Task<Void, Never>?
+    /// The view and filter the grid last scrolled to the place of.
+    private struct Shown: Equatable {
+        let scope: LibraryScope
+        let filter: MediaFilter
+    }
+    private var lastShown: Shown?
+    private var lastShownScope: LibraryScope? { lastShown?.scope }
+
+    /// The current view's place, with the current filter.
+    private var placeKey: String { scope.placeKey(filter) }
+
+    /// A place being left is written now, not after the delay that scrolling
+    /// waits for.
+    private func savePlace(_ key: String) {
+        if let id = places[key], let store { Task { await store.setSetting(key, String(id)) } }
+    }
+    /// While a view is coming up and before it has been scrolled to its place,
+    /// what the grid reports at the top belongs to no view yet.
+    private var restoringPlace = true
+    /// What the grid last reported at its top, place or not. For the smoke test.
+    private(set) var gridTop: Int64?
+
+    /// The grid's top photo changed: this view's place, saved a moment after
+    /// scrolling stops.
+    func notePlace(_ id: Int64?) {
+        gridTop = id
+        guard !restoringPlace, viewing == nil, let id, items.contains(where: { $0.id == id }) else { return }
+        let key = placeKey
+        guard places[key] != id else { return }
+        places[key] = id
+        placeSave?.cancel()
+        placeSave = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled, let store = self?.store else { return }
+            await store.setSetting(key, String(id))
+        }
+    }
+
+    /// The grid has scrolled to the view's place; from now on its top photo is
+    /// this view's place.
+    func placeRestored() {
+        restoringPlace = false
+        SmokeHooks.mark("place restored")
+    }
+
+    /// The grid acts on each scroll request once — not again when it's rebuilt
+    /// for another view while the old request is still set.
+    private var handledScroll: UUID?
+    func takeScrollRequest(_ request: ScrollRequest) -> Bool {
+        guard handledScroll != request.token else { return false }
+        handledScroll = request.token
+        return true
+    }
+
+    /// Scrolls a view that has just come up to where it was left, or to its
+    /// top. A photo that has left the view since starts it at the top.
+    private func restorePlace(of scope: LibraryScope, filter: MediaFilter, revealing: Bool) async {
+        // This filter's own place; or, the first time a filter is used in the
+        // view, the unfiltered place if the filter still shows that photo.
+        var keys = [scope.placeKey(filter)]
+        if filter != .all { keys.append(scope.placeKey(.all)) }
+        for key in keys where places[key] == nil {
+            if let saved = await store?.setting(key).flatMap(Int64.init) { places[key] = saved }
+        }
+        guard !revealing else { restoringPlace = false; return }
+        let remembered = keys.lazy.compactMap { self.places[$0] }.first { id in self.items.contains { $0.id == id } }
+        guard let target = remembered ?? items.first?.id else { restoringPlace = false; return }
+        scrollRequest = ScrollRequest(id: target, anchor: .top, restoresPlace: true)
+        // Should the grid never act on it, places are noted again all the same.
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if let self, self.lastShown == Shown(scope: scope, filter: filter) { self.restoringPlace = false }
+        }
+    }
     /// A photo to select and scroll to once the next reload has it — set by
     /// Show in Library before it switches the view.
     private var pendingReveal: Int64?
@@ -164,6 +340,9 @@ final class LibraryModel: ObservableObject {
             savedWindowFrame = await store.setting("window.frame")
             showProperties = await store.setting("viewer.properties") == "1"
             if let size = await store.setting("grid.size").flatMap(Double.init) { thumbnailSize = size }
+            showWholePhotos = await store.setting("grid.whole") == "1"
+            if let seconds = await store.setting("viewer.interval").flatMap(Double.init), seconds > 0 { slideInterval = seconds }
+            if let speed = await store.setting("video.speed").flatMap(Float.init), speed > 0 { videoSpeed = speed }
             locateTagger(root: root)
             await reloadTags()
             await reload()
@@ -198,6 +377,7 @@ final class LibraryModel: ObservableObject {
             self.scanning = false
             self.scanProgress = nil
             self.scanTask = nil
+            SmokeHooks.mark("scan finished")
             await self.reloadTags()
             await self.reload()
             if stopped {
@@ -205,6 +385,9 @@ final class LibraryModel: ObservableObject {
             } else {
                 self.openViewerForSmokeTest()
                 await self.openFilterForSmokeTest()
+                await self.checkPlacesForSmokeTest()
+                await self.checkPlaybackForSmokeTest()
+                await self.timeSwitchingForSmokeTest()
                 await self.considerTagging()
             }
         }
@@ -265,6 +448,10 @@ final class LibraryModel: ObservableObject {
         smokeViewerOpened = true
         select(only: first.id)
         viewing = first
+        if ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_SLIDESHOW"] == "1" {
+            setSlideInterval(30)
+            nextOn = true
+        }
         print("smoke: viewer opened \(first.relPath)")
         // With the properties panel open too, so the idle-CPU check covers it.
         if !showProperties {
@@ -286,6 +473,122 @@ final class LibraryModel: ObservableObject {
         rules.cycle(.tag, "sky")
         await updateRules(album.id, rules)
         print("smoke: filter panel open, \(items.count) photos match")
+        fflush(stdout)
+    }
+
+    /// Hook for `Scripts/smoke-test.sh`: scrolls All Media down, visits a
+    /// folder, comes back, and reports whether each view kept its own place —
+    /// without synthetic scrolling, which would need Accessibility permission.
+    /// Inert unless the variable is set.
+    private var smokePlacesChecked = false
+    private var smokeFirstItems = false
+    private func checkPlacesForSmokeTest() async {
+        guard !smokePlacesChecked, ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_PLACES"] == "1",
+              scope == .all, items.count > 30,
+              let folder = folderTree?.children?.first(where: { $0.directCount > 0 })?.id else { return }
+        smokePlacesChecked = true
+        func settle() async { try? await Task.sleep(nanoseconds: 1_500_000_000) }
+        await settle()
+        scrollRequest = ScrollRequest(id: items[items.count * 2 / 3].id, anchor: .top)
+        await settle()
+        let allPlace = gridTop
+        scope = .folder(folder)
+        await settle()
+        let folderTop = gridTop, folderFirst = items.first?.id
+        scope = .all
+        await settle()
+        let back = gridTop
+        print("smoke: place kept: \(allPlace != nil && back == allPlace ? "yes" : "no") (\(allPlace.map(String.init) ?? "-") then \(back.map(String.init) ?? "-"))")
+        print("smoke: a folder opens at its top: \(folderTop != nil && folderTop == folderFirst ? "yes" : "no")")
+
+        // Only videos, then all again: the place is where it was.
+        filter = .videos
+        await settle()
+        filter = .all
+        await settle()
+        print("smoke: place kept through a filter: \(gridTop == allPlace ? "yes" : "no") (\(allPlace.map(String.init) ?? "-") then \(gridTop.map(String.init) ?? "-"))")
+        // Photos only, in another view and back: the place is a photo, so
+        // Photos finds it too.
+        filter = .photos
+        await settle()
+        scope = .folder(folder)
+        await settle()
+        scope = .all
+        await settle()
+        print("smoke: place kept with a filter on: \(gridTop == allPlace ? "yes" : "no") (\(allPlace.map(String.init) ?? "-") then \(gridTop.map(String.init) ?? "-"))")
+        filter = .all
+        await settle()
+        fflush(stdout)
+    }
+
+    /// Hook for measuring: switches between All Media and a folder a few
+    /// times, timing each switch until the main thread is free again.
+    /// `PHOTOVAULT_SMOKE_SWITCH=1`; inert otherwise.
+    private func timeSwitchingForSmokeTest() async {
+        guard ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_SWITCH"] == "1",
+              let folder = folderTree?.children?.first(where: { $0.directCount > 0 })?.id else { return }
+        func settle() async { try? await Task.sleep(nanoseconds: 1_500_000_000) }
+        await settle()
+        for target in [LibraryScope.folder(folder), .all, .folder(folder), .all] {
+            let start = Date()
+            scope = target
+            // Until the reload has landed and the main thread has drawn it.
+            while lastShownScope != target { try? await Task.sleep(nanoseconds: 5_000_000) }
+            await withCheckedContinuation { c in DispatchQueue.main.async { c.resume() } }
+            SmokeHooks.say(String(format: "switch to %@ took %.0f ms (%d items)",
+                                  target == .all ? "All Media" : "a folder", Date().timeIntervalSince(start) * 1000, items.count))
+            await settle()
+        }
+    }
+
+    /// Hook for `Scripts/smoke-test.sh`: a slideshow, a video looping with
+    /// Repeat, its speed changed in the player as the controls' speed menu
+    /// does, and Play Next moving on when it ends. Inert unless the variable
+    /// is set.
+    private var smokePlaybackChecked = false
+    private func checkPlaybackForSmokeTest() async {
+        guard !smokePlaybackChecked, ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_PLAYBACK"] == "1",
+              let photo = items.first(where: { $0.mediaType == .photo }),
+              let video = items.first(where: { $0.mediaType == .video && $0.playable && ($0.duration ?? 99) < 4 })
+        else { return }
+        smokePlaybackChecked = true
+        func wait(_ seconds: Double) async { try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000)) }
+
+        select(only: photo.id)
+        viewing = photo
+        setSlideInterval(2)
+        nextOn = true
+        let before = smokeMoves
+        await wait(5)
+        print("smoke: slideshow moved on \(smokeMoves - before) times; display kept awake: \(displayAwake != 0 ? "yes" : "no")")
+
+        nextOn = false
+        repeatOn = true
+        viewing = video
+        await wait(1)
+        NotificationCenter.default.post(name: .smokeSetVideoRate, object: NSNumber(value: 1.5))
+        NotificationCenter.default.post(name: .smokeZoomVideo, object: NSNumber(value: 2.5))
+        await wait(4)
+        print("smoke: video speed taken from the player: \(videoSpeed)")
+        // Looped (Repeat) at least once by now: the zoom stays.
+        print("smoke: after looping,"); fflush(stdout)
+        NotificationCenter.default.post(name: .smokeZoomVideo, object: nil)
+
+        repeatOn = false
+        nextOn = true
+        let atVideo = smokeMoves
+        await wait(3)
+        print("smoke: moved on after the video ended: \(smokeMoves > atVideo ? "yes" : "no")")
+        // Opened again — a new player — it starts unzoomed.
+        nextOn = false
+        viewing = video
+        // Time for the video to load and its view to appear, on a busy run too.
+        await wait(2.5)
+        print("smoke: opened again,"); fflush(stdout)
+        NotificationCenter.default.post(name: .smokeZoomVideo, object: nil)
+        await wait(0.5)
+        viewing = nil
+        print("smoke: closing the viewer ended the slideshow: \(!slideshowOn && displayAwake == 0 ? "yes" : "no")")
         fflush(stdout)
     }
 
@@ -312,8 +615,11 @@ final class LibraryModel: ObservableObject {
         // has no work that needs the main thread. The timeout is a backstop for
         // a scan still in flight, which close() has to queue behind.
         let done = DispatchSemaphore(value: 0)
+        let placeKey = self.placeKey, place = places[placeKey]
+        placeSave?.cancel()
         Task.detached(priority: .userInitiated) {
             if let windowFrame { await store.setSetting("window.frame", windowFrame) }
+            if let place { await store.setSetting(placeKey, String(place)) }
             await store.close()
             done.signal()
         }
@@ -326,25 +632,35 @@ final class LibraryModel: ObservableObject {
         guard let store else { return }
         do {
             let scope = self.scope, filter = self.filter
+            // Everything is fetched first and published together, and only
+            // what changed: each published value redraws the whole window, the
+            // grid's every photo included, and publishing them one by one
+            // between catalog reads made switching views take a quarter of a
+            // second on a library of thousands of photos.
             let sort = try await store.sortSetting(for: scope)
-            self.sort = sort
-            items = try await store.items(scope: scope, filter: filter, sort: sort?.order ?? .date,
-                                          ascending: sort?.ascending ?? true, groups: tagGroups)
+            let newItems = try await store.items(scope: scope, filter: filter, sort: sort?.order ?? .date,
+                                                 ascending: sort?.ascending ?? true, seed: sort?.seed ?? 0, groups: tagGroups)
             let albums = try await store.albums(), smartAlbums = try await store.smartAlbums()
+            let total = try await store.photoCount()
+            let trash = try await store.trashCount()
+            let tree = try await store.folderTree()
+            var counts: [Int64: Int] = [:]
+            for a in albums { counts[a.id] = try await store.albumCount(a.id) }
+
+            if self.sort != sort { self.sort = sort }
+            if items != newItems { items = newItems }
             // Rows appear and disappear in the sidebar without animating: an
             // animated removal could leave the old row's text behind.
             var still = Transaction()
             still.disablesAnimations = true
             withTransaction(still) {
-                self.albums = albums
-                self.smartAlbums = smartAlbums
+                if self.albums != albums { self.albums = albums }
+                if self.smartAlbums != smartAlbums { self.smartAlbums = smartAlbums }
             }
-            totalCount = try await store.photoCount()
-            trashCount = try await store.trashCount()
-            folderTree = try await store.folderTree()
-            var counts: [Int64: Int] = [:]
-            for a in albums { counts[a.id] = try await store.albumCount(a.id) }
-            albumCounts = counts
+            if totalCount != total { totalCount = total }
+            if trashCount != trash { trashCount = trash }
+            if folderTree != tree { folderTree = tree }
+            if albumCounts != counts { albumCounts = counts }
             // `viewing` is a value copy taken when the photo was opened. Without
             // this it keeps the favorite flag it had at that moment, so the
             // heart in the viewer only caught up on close and reopen.
@@ -359,12 +675,23 @@ final class LibraryModel: ObservableObject {
                 }
             }
             sel.intersect(with: order)
+            var revealing = false
             if let id = pendingReveal, items.contains(where: { $0.id == id }) {
                 pendingReveal = nil
+                revealing = true
                 select(only: id)
                 scrollRequest = ScrollRequest(id: id)
             }
+            let shown = Shown(scope: scope, filter: filter)
+            if lastShown != shown, self.scope == scope, self.filter == filter {
+                lastShown = shown
+                await restorePlace(of: scope, filter: filter, revealing: revealing)
+            }
             if !scanning { status = "\(totalCount) items" }
+            if !smokeFirstItems, !items.isEmpty {
+                smokeFirstItems = true
+                SmokeHooks.mark("first items loaded (\(items.count))")
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -634,6 +961,16 @@ final class LibraryModel: ObservableObject {
     // MARK: - Thumbnail size
 
     /// Saved half a second after the slider or pinch comes to rest.
+    /// View › Show Whole Photos: each thumbnail uncropped, at its own shape,
+    /// rather than a square from its middle. Saved per vault.
+    @Published private(set) var showWholePhotos = false
+
+    func toggleWholePhotos() {
+        showWholePhotos.toggle()
+        let on = showWholePhotos
+        Task { await store?.setSetting("grid.whole", on ? "1" : "0") }
+    }
+
     func setThumbnailSize(_ size: Double) {
         thumbnailSize = size
         thumbnailSizeSave?.cancel()
@@ -671,13 +1008,20 @@ final class LibraryModel: ObservableObject {
     func setSortOrder(_ order: PhotoOrder) {
         guard var sort, order != sort.order else { return }
         sort.order = order
+        // Random: a new shuffle each time it's chosen.
+        if order == .random { sort.seed = UInt64.random(in: 1...UInt64.max) }
         save(sort)
     }
 
-    /// Oldest first ⇄ newest first, or A to Z ⇄ Z to A.
+    /// Oldest first ⇄ newest first, or A to Z ⇄ Z to A — or, in Random,
+    /// another shuffle.
     func toggleSortDirection() {
         guard var sort else { return }
-        sort.ascending.toggle()
+        if sort.order == .random {
+            sort.seed = UInt64.random(in: 1...UInt64.max)
+        } else {
+            sort.ascending.toggle()
+        }
         save(sort)
     }
 
@@ -781,6 +1125,23 @@ final class LibraryModel: ObservableObject {
         await reload()
     }
 
+    /// Photos waiting on the name for a New Album… chosen from Add to Album.
+    @Published var newAlbumRequest: NewAlbumRequest?
+
+    struct NewAlbumRequest: Identifiable {
+        let id = UUID()
+        let photoIDs: [Int64]
+    }
+
+    /// A regular album holding `photoIDs`, in that order. The view stays where
+    /// it is, so more photos can go on being added.
+    func newAlbum(named name: String, adding photoIDs: [Int64]) async {
+        guard let store else { return }
+        guard let id = try? await store.createAlbum(named: name) else { return }
+        if !photoIDs.isEmpty { try? await store.addToAlbum(id, photoIDs: photoIDs) }
+        await reload()
+    }
+
     func newAlbum(named name: String) async {
         guard let store else { return }
         guard let id = try? await store.createAlbum(named: name) else { return }
@@ -817,6 +1178,69 @@ final class LibraryModel: ObservableObject {
     func removeSelectionFromCurrentAlbum() async {
         guard let store, case .album(let id) = scope, !selection.isEmpty else { return }
         try? await store.removeFromAlbum(id, photoIDs: Array(selection))
+        await reload()
+    }
+
+    /// A drag in the sidebar: `dragged` put just before or after `target`, and
+    /// the new order kept in the vault's catalog.
+    func moveAlbum(_ dragged: Int64, beside target: Int64, after: Bool) {
+        guard let list = Self.moving(dragged, beside: target, after: after, in: albums) else { return }
+        albums = list
+        Task {
+            try? await store?.setAlbumOrder(list.map(\.id))
+            await reload()
+        }
+    }
+
+    func moveSmartAlbum(_ dragged: Int64, beside target: Int64, after: Bool) {
+        guard let list = Self.moving(dragged, beside: target, after: after, in: smartAlbums) else { return }
+        smartAlbums = list
+        Task {
+            try? await store?.setSmartAlbumOrder(list.map(\.id))
+            await reload()
+        }
+    }
+
+    /// `list` with `dragged` moved to just before or after `target`; nil if
+    /// either isn't in it.
+    static func moving<T: Identifiable>(_ dragged: T.ID, beside target: T.ID, after: Bool, in list: [T]) -> [T]? {
+        guard dragged != target, let from = list.firstIndex(where: { $0.id == dragged }),
+              list.contains(where: { $0.id == target }) else { return nil }
+        var out = list
+        let item = out.remove(at: from)
+        guard let at = out.firstIndex(where: { $0.id == target }) else { return nil }
+        out.insert(item, at: after ? at + 1 : at)
+        return out
+    }
+
+    /// Duplicate Album: a copy named "<name> (copy)", just below it, shown.
+    func duplicateAlbum(_ id: Int64) async {
+        guard let store, let copy = try? await store.duplicateAlbum(id) else { return }
+        await reload()
+        scope = .album(copy)
+    }
+
+    func duplicateSmartAlbum(_ id: Int64) async {
+        guard let store, let copy = try? await store.duplicateSmartAlbum(id) else { return }
+        await reload()
+        scope = .smart(copy)
+    }
+
+    /// Several albums and smart albums at once, picked with ⌘ or ⇧.
+    func deleteAlbums(_ doomed: [LibraryScope]) async {
+        guard let store else { return }
+        // Off any of them first, so the sidebar never removes the selected row.
+        if doomed.contains(scope) {
+            scope = .all
+            await reload()
+        }
+        for item in doomed {
+            switch item {
+            case .album(let id): try? await store.deleteAlbum(id)
+            case .smart(let id): try? await store.deleteSmartAlbum(id)
+            default: break
+            }
+        }
         await reload()
     }
 
@@ -1028,4 +1452,13 @@ final class LibraryModel: ObservableObject {
             return inside.split(separator: "/").joined(separator: " › ")
         }
     }
+}
+
+extension Notification.Name {
+    /// Smoke test only: set the playing video's rate, as the controls' speed
+    /// menu would.
+    static let smokeSetVideoRate = Notification.Name("PhotoVaultSmokeSetVideoRate")
+    /// Smoke test only: zoom the video (object: the zoom), or report its zoom
+    /// (no object).
+    static let smokeZoomVideo = Notification.Name("PhotoVaultSmokeZoomVideo")
 }

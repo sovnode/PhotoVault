@@ -7,7 +7,8 @@ public enum SetupStep: String, Sendable, CaseIterable {
     case opening = "Opening the vault"
     case quitting = "Quitting PhotoVault"
     case installingApp = "Installing PhotoVault"
-    case installingJoyTag = "Installing JoyTag"
+    /// JoyTag's model — part of PhotoVault, so the list doesn't single it out.
+    case installingJoyTag = "Copying PhotoVault's files"
     case checking = "Checking"
 }
 
@@ -115,7 +116,9 @@ public enum VaultSetup {
     /// A new vault, `<name>.sparsebundle` in `folder`, mounted, with
     /// PhotoVault on it.
     @discardableResult
-    public static func create(name: String, in folder: URL, size: String, payload: Payload,
+    /// With a `password`, the vault is encrypted: nobody can open it without
+    /// the password, and nothing can recover it if it's forgotten.
+    public static func create(name: String, in folder: URL, size: String, payload: Payload, password: String? = nil,
                               mountRoot: URL? = nil, progress: (SetupStep) -> Void = { _ in }) throws -> SetupReport {
         let name = name.trimmingCharacters(in: .whitespaces)
         if let problem = problem(withName: name) { throw SetupError(problem) }
@@ -126,10 +129,11 @@ public enum VaultSetup {
         guard FileManager.default.isWritableFile(atPath: folder.path) else {
             throw SetupError("The installer can't save in “\(folder.lastPathComponent)”. Choose another folder.")
         }
+        if let password, password.isEmpty { throw SetupError("The password can't be empty.") }
         progress(.creating)
-        try DiskImages.create(bundle, volumeName: name, size: size)
+        try DiskImages.create(bundle, volumeName: name, size: size, password: password)
         progress(.opening)
-        let mount = try DiskImages.attach(bundle, mountRoot: mountRoot)
+        let mount = try DiskImages.attach(bundle, mountRoot: mountRoot, password: password)
         // PhotoVault anchors on Photos/; and Spotlight is told to stay out
         // before any photo arrives.
         try FileManager.default.createDirectory(at: mount.appendingPathComponent("Photos"), withIntermediateDirectories: true)
@@ -149,7 +153,9 @@ public enum VaultSetup {
     /// What's on `target` — a vault's disk image, or a mounted vault —
     /// mounting the image if it isn't already. `mounted` says whether this
     /// call mounted it.
-    public static func open(_ target: URL, mountRoot: URL? = nil) throws -> (vault: ExistingVault, mounted: Bool) {
+    /// A password-protected image that isn't open throws `PasswordNeeded`
+    /// unless its `password` is given.
+    public static func open(_ target: URL, mountRoot: URL? = nil, password: String? = nil) throws -> (vault: ExistingVault, mounted: Bool) {
         if DiskImages.isDiskImage(target) {
             guard FileManager.default.fileExists(atPath: target.path) else {
                 throw SetupError("“\(target.lastPathComponent)” isn't there any more.")
@@ -157,7 +163,7 @@ public enum VaultSetup {
             if let mount = DiskImages.mountPoint(of: target) {
                 return (try inspect(mount, image: target), false)
             }
-            let mount = try DiskImages.attach(target, mountRoot: mountRoot)
+            let mount = try DiskImages.attach(target, mountRoot: mountRoot, password: password)
             do {
                 return (try inspect(mount, image: target), true)
             } catch {
@@ -194,10 +200,10 @@ public enum VaultSetup {
     /// Puts PhotoVault on an existing vault — its disk image, or the vault
     /// itself — mounting it if needed and quitting a PhotoVault open from it.
     @discardableResult
-    public static func install(into target: URL, payload: Payload, mountRoot: URL? = nil,
+    public static func install(into target: URL, payload: Payload, password: String? = nil, mountRoot: URL? = nil,
                                progress: (SetupStep) -> Void = { _ in }) throws -> SetupReport {
         if DiskImages.isDiskImage(target), DiskImages.mountPoint(of: target) == nil { progress(.opening) }
-        let mount = try open(target, mountRoot: mountRoot).vault.mountPoint
+        let mount = try open(target, mountRoot: mountRoot, password: password).vault.mountPoint
         let replaced = version(ofAppIn: mount)
 
         let running = runningPhotoVaults(in: mount)

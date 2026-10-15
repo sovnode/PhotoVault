@@ -201,6 +201,40 @@ struct VaultSetupTests {
         #expect(throws: SetupError.self) { try Payload(folder: other.folder) }
     }
 
+    @Test func aPasswordProtectedVaultOpensOnlyWithItsPassword() throws {
+        let scratch = try Scratch()
+        let payload = try scratch.payload(version: "1.3.0")
+        let password = "throwaway test password"
+        let created = try VaultSetup.create(name: "Locked", in: scratch.root, size: "100m", payload: payload,
+                                            password: password, mountRoot: scratch.mountRoot)
+        let image = try #require(created.createdImage)
+        #expect(fm.fileExists(atPath: created.mountPoint.appendingPathComponent("PhotoVault.app").path))
+        // Nothing of the vault's contents is readable in its band files.
+        let bands = image.appendingPathComponent("bands")
+        let readme = try Data(contentsOf: payload.readme)
+        for band in try fm.contentsOfDirectory(at: bands, includingPropertiesForKeys: nil) {
+            #expect(try Data(contentsOf: band).range(of: readme) == nil, "the README is in a band in the clear")
+        }
+        try DiskImages.detach(created.mountPoint)
+        #expect(DiskImages.isEncrypted(image))
+        #expect(!DiskImages.isEncrypted(scratch.root.appendingPathComponent("nothing.sparsebundle")))
+
+        #expect(throws: PasswordNeeded.self) { try VaultSetup.open(image, mountRoot: scratch.mountRoot) }
+        #expect(throws: SetupError("That password isn't right.")) {
+            try VaultSetup.open(image, mountRoot: scratch.mountRoot, password: "wrong")
+        }
+        #expect(DiskImages.mountPoint(of: image) == nil)
+
+        // Installing on it, closed: opened with the password, then as any vault.
+        let report = try VaultSetup.install(into: image, payload: payload, password: password, mountRoot: scratch.mountRoot)
+        #expect(report.joyTag == .alreadyThere("test1"))
+        #expect(try VaultSetup.inspect(report.mountPoint).installedVersion == "1.3.0")
+        #expect(throws: SetupError.self) {
+            try VaultSetup.create(name: "Empty", in: scratch.root, size: "100m", payload: payload, password: "",
+                                  mountRoot: scratch.mountRoot)
+        }
+    }
+
     @Test func namesAreChecked() {
         #expect(VaultSetup.problem(withName: "Family Photos") == nil)
         #expect(VaultSetup.problem(withName: "  ") != nil)

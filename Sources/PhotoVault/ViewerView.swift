@@ -16,15 +16,60 @@ import PhotoVaultCore
 @MainActor
 final class PlaybackController: ObservableObject {
     @Published private(set) var player: AVPlayer?
+    /// One speed for every video: applied as each one starts, and taken from
+    /// the player whenever the person picks another in its controls.
+    @Published private(set) var speed: Float = 1
+    var onSpeedChange: ((Float) -> Void)?
+    /// The video reached its end.
+    var onEnded: (() -> Void)?
+    private var endObserver: NSObjectProtocol?
+    private var rateObservations: [NSKeyValueObservation] = []
+
+    func setSpeed(_ speed: Float) {
+        guard speed > 0 else { return }
+        self.speed = speed
+        player?.defaultRate = speed
+    }
 
     func play(url: URL) {
         release()
         let p = AVPlayer(url: url)
-        p.play()
+        p.defaultRate = speed
+        p.playImmediately(atRate: speed)
+        endObserver = NotificationCenter.default.addObserver(
+            forName: AVPlayerItem.didPlayToEndTimeNotification, object: p.currentItem, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.onEnded?() }
+        }
+        // The controls' speed menu changes the player's rate (while playing)
+        // or its default rate: either way, a new speed for every video.
+        for path in [\AVPlayer.rate, \AVPlayer.defaultRate] {
+            rateObservations.append(p.observe(path, options: [.new]) { [weak self] player, _ in
+                let chosen = player.rate > 0 ? player.rate : player.defaultRate
+                DispatchQueue.main.async { self?.adopt(chosen) }
+            })
+        }
         player = p
     }
 
+    private func adopt(_ chosen: Float) {
+        guard chosen > 0, abs(chosen - speed) > 0.01 else { return }
+        speed = chosen
+        player?.defaultRate = chosen
+        onSpeedChange?(chosen)
+    }
+
+    /// Repeat: back to the start, at the same speed.
+    func replay() {
+        guard let p = player else { return }
+        p.seek(to: .zero)
+        p.playImmediately(atRate: speed)
+    }
+
     func release() {
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        endObserver = nil
+        rateObservations = []
         guard let p = player else { return }
         p.pause()
         p.replaceCurrentItem(with: nil)   // this is the part that matters
@@ -78,7 +123,7 @@ struct ViewerView: View {
                     if !item.playable {
                         unsupportedVideo
                     } else if let player = playback.player {
-                        VideoSurface(player: player).ignoresSafeArea()
+                        VideoSurface(player: player, speed: playback.speed).ignoresSafeArea()
                     } else {
                         ProgressView().controlSize(.large)
                     }
@@ -92,7 +137,16 @@ struct ViewerView: View {
                                   onStep: { model.step($0) },
                                   onShowInLibrary: (model.viewing ?? item).trashed ? nil : {
                                       model.showInLibrary(model.viewing ?? item)
-                                  })
+                                  },
+                                  onAddToAlbum: (model.viewing ?? item).trashed ? nil : { albumID in
+                                      let live = model.viewing ?? item
+                                      if let albumID {
+                                          Task { await model.addToAlbum(albumID, items: [live]) }
+                                      } else {
+                                          model.newAlbumRequest = .init(photoIDs: [live.id])
+                                      }
+                                  },
+                                  albums: model.albums.map { ($0.id, $0.name) })
                         .ignoresSafeArea()
                 }
 
@@ -122,8 +176,21 @@ struct ViewerView: View {
             if case .active = phase { pointerMoved() }
         }
         .onAppear {
+            if ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_SHOW_HEADER"] == "1" { revealChrome() }
             lastPointer = NSEvent.mouseLocation
+            playback.setSpeed(model.videoSpeed)
+            playback.onSpeedChange = { model.setVideoSpeed($0) }
+            playback.onEnded = { videoEnded() }
             load()
+        }
+        // A slideshow: each photo stays for the chosen time, then the next or a
+        // random item. Restarts whenever the photo changes — including a step
+        // by hand — or the setting does; a video moves on when it ends instead.
+        .task(id: "\(item.id) \(model.slideshowOn) \(model.slideInterval)") {
+            guard model.slideshowOn, item.mediaType == .photo || !item.playable else { return }
+            try? await Task.sleep(nanoseconds: UInt64(model.slideInterval * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            model.advance()
         }
         .onDisappear { unload(); hideTask?.cancel() }
         .onChange(of: imageKey) { _, _ in load() }
@@ -139,6 +206,9 @@ struct ViewerView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWorkspace.willUnmountNotification).receive(on: RunLoop.main)) { _ in
             unload()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .smokeSetVideoRate)) { note in
+            if let rate = (note.object as? NSNumber)?.floatValue { playback.player?.rate = rate }
         }
     }
 
@@ -157,6 +227,8 @@ struct ViewerView: View {
                 .help("Next (→)")
             Text(item.displayName).lineLimit(1)
             Spacer()
+            playbackControls
+            Divider().frame(height: 16)
             Group {
                 Button { Task { await model.rotateViewing(clockwise: false) } } label: {
                     Image(systemName: "rotate.left")
@@ -201,6 +273,61 @@ struct ViewerView: View {
         .background(.black.opacity(0.35))
     }
 
+    /// Repeat, Random and Play Next, and — while a slideshow can run — how
+    /// long each photo stays.
+    private var playbackControls: some View {
+        HStack(spacing: 12) {
+            toggle(\.repeatOn, symbol: "repeat", help: "Repeat: loop the video; start a slideshow again at the end")
+            toggle(\.randomOn, symbol: "shuffle", help: "Random: move on to a random item when a video ends, or after a photo's time")
+            toggle(\.nextOn, symbol: "forward.end", help: "Play Next: move on to the next item when a video ends, or after a photo's time")
+            if model.slideshowOn {
+                // A plain button-style menu draws its label as given — white,
+                // like the icons beside it. The borderless menu style drew it in
+                // the system's dark text, lost on the dark header.
+                Menu {
+                    ForEach(LibraryModel.slideIntervals, id: \.self) { seconds in
+                        Button("\(Int(seconds)) seconds") { model.setSlideInterval(seconds) }
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "timer")
+                        Text("\(Int(model.slideInterval)) s").font(.callout.monospacedDigit())
+                        Image(systemName: "chevron.down").font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .contentShape(Rectangle())
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("How long each photo stays in the slideshow")
+            }
+        }
+    }
+
+    private func toggle(_ flag: ReferenceWritableKeyPath<LibraryModel, Bool>, symbol: String, help: String) -> some View {
+        let on = model[keyPath: flag]
+        return Button { model[keyPath: flag].toggle() } label: {
+            Image(systemName: symbol)
+                .foregroundStyle(on ? Color.accentColor : .white)
+                .padding(3)
+                .background(on ? Color.white.opacity(0.25) : .clear, in: RoundedRectangle(cornerRadius: 5))
+        }
+        .help(help + (on ? " (on)" : " (off)"))
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    /// A video reached its end: loop it, move on, or stop.
+    private func videoEnded() {
+        if model.repeatOn {
+            playback.replay()
+            SmokeHooks.say("video ended and looped")
+        } else if model.slideshowOn {
+            model.advance()
+        }
+    }
+
     /// Shows the header, but only for real movement. When the picture under a
     /// still cursor changes — every arrow-key step — macOS can deliver hover
     /// and mouse-moved events without the pointer moving, which would bring the
@@ -219,6 +346,8 @@ struct ViewerView: View {
     private func revealChrome() {
         if !chromeVisible { chromeVisible = true }
         hideTask?.cancel()
+        // Smoke test only: the header stays, to be looked at in a screenshot.
+        if ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_SHOW_HEADER"] == "1" { return }
         hideTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             if !Task.isCancelled { chromeVisible = false }
@@ -289,22 +418,47 @@ struct ViewerView: View {
 
 /// `AVPlayerView` rather than SwiftUI's `VideoPlayer`, because the teardown path
 /// has to reach the view's own player reference too.
+///
+/// Pinch zooms the video, and two fingers move it about while zoomed, as for
+/// photos — AVPlayerView's own magnification. A video looping with Repeat
+/// keeps its zoom (the same player plays it again); the next video, or the
+/// same one opened again, starts unzoomed: nothing is remembered.
 struct VideoSurface: NSViewRepresentable {
     let player: AVPlayer
+    /// The one speed for every video, shown as chosen in the controls.
+    var speed: Float = 1
+
+    final class Coordinator {
+        weak var view: AVPlayerView?
+        var observers: [NSObjectProtocol] = []
+        deinit { observers.forEach(NotificationCenter.default.removeObserver) }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> AVPlayerView {
         let v = AVPlayerView()
         v.controlsStyle = .floating
         v.showsFullScreenToggleButton = true
+        v.allowsMagnification = true
         v.player = player
+        context.coordinator.view = v
+        SmokeHooks.watchVideoZoom(context.coordinator)
         return v
     }
 
     func updateNSView(_ v: AVPlayerView, context: Context) {
-        if v.player !== player { v.player = player }
+        if v.player !== player {
+            v.player = player
+            // A different video starts unzoomed.
+            v.magnification = 1
+        }
+        if let match = v.speeds.first(where: { abs($0.rate - speed) < 0.01 }), v.selectedSpeed != match {
+            v.selectSpeed(match)
+        }
     }
 
-    static func dismantleNSView(_ v: AVPlayerView, coordinator: ()) {
+    static func dismantleNSView(_ v: AVPlayerView, coordinator: Coordinator) {
         v.player?.pause()
         v.player?.replaceCurrentItem(with: nil)
         v.player = nil

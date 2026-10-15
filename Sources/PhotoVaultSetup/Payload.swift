@@ -47,6 +47,13 @@ public struct Payload: Sendable {
     }
 }
 
+/// The vault is password-protected and isn't open: ask for its password, then
+/// try again with it.
+public struct PasswordNeeded: LocalizedError, Equatable {
+    public init() {}
+    public var errorDescription: String? { "This vault is protected with a password." }
+}
+
 /// A failure, in words for the person running the installer.
 public struct SetupError: LocalizedError, Equatable {
     public let message: String

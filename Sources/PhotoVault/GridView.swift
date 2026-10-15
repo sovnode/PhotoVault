@@ -14,7 +14,12 @@ struct GridView: View {
     private var cellSize: Double { model.thumbnailSize }
     /// Cell size when a pinch began; the gesture scales from there.
     @State private var pinchStart: Double?
-    private static let sizeRange: ClosedRange<Double> = 90...300
+    /// The photo at the top-left of the screen: the view's place.
+    @State private var topID: Int64?
+    /// Up to 600 points: a few photos across with the sidebar hidden. The
+    /// 512-pixel thumbnails are sharp to about 256 points on a Retina screen,
+    /// slightly soft above; the viewer shows the full photo.
+    private static let sizeRange: ClosedRange<Double> = 90...600
 
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: cellSize, maximum: cellSize * 1.5), spacing: 8)]
@@ -31,11 +36,12 @@ struct GridView: View {
             if model.items.isEmpty {
                 emptyState
             } else {
-                ScrollViewReader { proxy in
+                ScrollViewReader { _ in
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 8) {
                         ForEach(model.items) { item in
-                            Cell(item: item, size: cellSize, selected: model.selection.contains(item.id))
+                            Cell(item: item, size: cellSize, selected: model.selection.contains(item.id),
+                                 whole: model.showWholePhotos)
                                 // One tap handler, not a double-tap handler stacked on a
                                 // single-tap one. With both, SwiftUI holds every click for
                                 // the double-click interval to see whether a second is
@@ -52,12 +58,31 @@ struct GridView: View {
                                 .contextMenu { menu(for: item) }
                         }
                     }
+                    .scrollTargetLayout()
                     .padding(8)
                 }
-                .onChange(of: model.scrollRequest) { _, request in
-                    guard let request else { return }
-                    proxy.scrollTo(request.id, anchor: .center)
+                .scrollPosition(id: $topID, anchor: .topLeading)
+                .onChange(of: topID) { _, id in model.notePlace(id) }
+                // `.task(id:)` rather than onChange: it also runs when the grid
+                // first appears, which on opening a vault is the same moment
+                // the request to go to its place is made — onChange missed it.
+                .task(id: model.scrollRequest?.token) {
+                    guard let request = model.scrollRequest, model.takeScrollRequest(request) else { return }
+                    // Through the scroll position itself: with it attached, the
+                    // reader's scrollTo is overruled by it. The photo comes to
+                    // the top row.
+                    var still = Transaction()
+                    still.disablesAnimations = true
+                    withTransaction(still) { topID = request.id }
+                    if request.restoresPlace {
+                        // Once the scroll has landed, what's at the top is
+                        // this view's place again.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { model.placeRestored() }
+                    }
                 }
+                // A scroll area of its own for each view: scrolling one album
+                // never moves another, and each comes back where it was left.
+                .id(model.scope.placeKey(model.filter))
                 // Clicking past the last cell clears the selection, as in
                 // Finder. Attached to the scroll view rather than to its
                 // content: an unbounded frame inside a ScrollView makes the two
@@ -81,7 +106,9 @@ struct GridView: View {
                 }
             }
         }
-        .navigationTitle(model.scopeTitle)
+        // No title while a photo or video is open: it showed over the top of
+        // the picture whenever macOS brought the title bar back.
+        .navigationTitle(model.viewing == nil ? model.scopeTitle : "")
         .alert("Empty the Trash?", isPresented: $model.confirmingEmptyTrash) {
             Button("Empty Trash", role: .destructive) { Task { await model.emptyTrash() } }
             Button("Cancel", role: .cancel) {}
@@ -126,23 +153,26 @@ struct GridView: View {
                 .help("Change which tags this smart album shows")
             }
 
-            // Albums keep their own order, so the sort only appears elsewhere.
             if let sort = model.sort {
                 Picker("Sort", selection: Binding(get: { sort.order },
                                                   set: { model.setSortOrder($0) })) {
-                    ForEach(PhotoOrder.allCases, id: \.self) { Text($0.label).tag($0) }
+                    ForEach(PhotoOrder.choices(for: model.scope), id: \.self) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.menu)
                 .fixedSize()
-                .help("Order photos by the date they were taken, the date their files were created, or file name")
+                .help(model.scope.isAlbum
+                      ? "Order photos as they were added to the album, by date taken or created, file name, video length, or at random"
+                      : "Order photos by date taken or created, file name, video length (photos count as none), or at random")
                 Button {
                     model.toggleSortDirection()
                 } label: {
-                    Image(systemName: sort.ascending ? "arrow.up" : "arrow.down")
+                    Image(systemName: sort.order == .random ? "shuffle" : sort.ascending ? "arrow.up" : "arrow.down")
                         .frame(width: 14)
                 }
-                .help("\(sort.order.directionLabel(ascending: sort.ascending)). Click for \(sort.order.directionLabel(ascending: !sort.ascending).lowercased()).")
-                .accessibilityLabel(sort.order.directionLabel(ascending: sort.ascending))
+                .help(sort.order == .random
+                      ? "Shuffle again"
+                      : "\(sort.order.directionLabel(ascending: sort.ascending)). Click for \(sort.order.directionLabel(ascending: !sort.ascending).lowercased()).")
+                .accessibilityLabel(sort.order == .random ? "Shuffle again" : sort.order.directionLabel(ascending: sort.ascending))
             }
 
             Image(systemName: "photo")
@@ -194,12 +224,12 @@ struct GridView: View {
         Button(allFavorite ? "Remove \(noun) from Favorites" : "Add \(noun) to Favorites") {
             Task { await model.setFavorite(!allFavorite, for: targets) }
         }
-        if !model.albums.isEmpty {
-            Menu("Add \(noun) to Album") {
-                ForEach(model.albums) { album in
-                    Button(album.name) {
-                        Task { await model.addToAlbum(album.id, items: targets) }
-                    }
+        Menu("Add \(noun) to Album") {
+            Button("New Album…") { model.newAlbumRequest = .init(photoIDs: targets.map(\.id)) }
+            if !model.albums.isEmpty { Divider() }
+            ForEach(model.albums) { album in
+                Button(album.name) {
+                    Task { await model.addToAlbum(album.id, items: targets) }
                 }
             }
         }
@@ -285,6 +315,9 @@ private struct ActivityStatus: View {
             Text(model.selection.isEmpty ? activity.status : "\(model.selection.count) selected")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                // In a narrow window, "63 items" broke into three lines.
+                .lineLimit(1)
+                .fixedSize()
         }
     }
 }
@@ -295,6 +328,8 @@ private struct Cell: View {
     let item: PhotoItem
     let size: Double
     let selected: Bool
+    /// The whole photo at its own shape, rather than a square from its middle.
+    let whole: Bool
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -302,7 +337,7 @@ private struct Cell: View {
                 // CGImage straight into the Image; no NSImage round trip.
                 Image(cg, scale: 1, label: Text(item.displayName))
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .aspectRatio(contentMode: whole ? .fit : .fill)
                     .frame(width: size, height: size)
                     .clipped()
             } else {
@@ -329,12 +364,61 @@ private struct Cell: View {
             .shadow(radius: 2)
         }
         .border(selected ? Color.accentColor : Color.clear, width: 3)
-        .onAppear { model.loadThumb(item) }
+        .onAppear {
+            model.loadThumb(item)
+            if !Cell.firstShown {
+                Cell.firstShown = true
+                SmokeHooks.mark("first thumbnail cell shown")
+            }
+        }
         .help(item.displayName)
     }
+
+    @MainActor static var firstShown = false
 
     static func timecode(_ seconds: Double) -> String {
         let s = Int(seconds.rounded())
         return String(format: "%d:%02d", s / 60, s % 60)
+    }
+}
+
+/// New Album… from Add to Album: a name, then a regular album holding the
+/// photos the menu was opened on.
+struct NewAlbumForPhotosSheet: View {
+    @EnvironmentObject var model: LibraryModel
+    @Environment(\.dismiss) private var dismiss
+    let request: LibraryModel.NewAlbumRequest
+    @State private var name = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("New Album").font(.headline)
+            TextField("Name", text: $name)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 300)
+                .onSubmit(create)
+            Text(request.photoIDs.count == 1 ? "The photo will be added to it."
+                                             : "The \(request.photoIDs.count) photos will be added to it.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Create", action: create)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(trimmed.isEmpty)
+            }
+        }
+        .padding(20)
+    }
+
+    private var trimmed: String { name.trimmingCharacters(in: .whitespaces) }
+
+    private func create() {
+        guard !trimmed.isEmpty else { return }
+        let name = trimmed, ids = request.photoIDs
+        dismiss()
+        Task { await model.newAlbum(named: name, adding: ids) }
     }
 }

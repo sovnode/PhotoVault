@@ -13,22 +13,49 @@ public enum DiskImages {
     /// allocation: the bundle takes only the space its contents use. Bands
     /// of 32 MB, as `Scripts/new-vault.sh` makes them: a long video spans
     /// fewer band files.
-    public static func create(_ bundle: URL, volumeName: String, size: String) throws {
-        try Shell.run(hdiutil, ["create", "-size", size, "-fs", "APFS", "-type", "SPARSEBUNDLE",
-                                "-imagekey", "sparse-band-size=65536", "-volname", volumeName, bundle.path])
+    ///
+    /// With a `password`, the image is encrypted with AES-256 by macOS itself.
+    /// The password goes to `hdiutil` through standard input only — never in
+    /// its arguments, which other programs can read.
+    public static func create(_ bundle: URL, volumeName: String, size: String, password: String? = nil) throws {
+        var args = ["create", "-size", size, "-fs", "APFS", "-type", "SPARSEBUNDLE",
+                    "-imagekey", "sparse-band-size=65536", "-volname", volumeName]
+        if password != nil { args += ["-encryption", "AES-256", "-stdinpass"] }
+        try Shell.run(hdiutil, args + [bundle.path], input: password.map(passphrase))
     }
+
+    /// Whether `image` is password-protected (encrypted).
+    public static func isEncrypted(_ image: URL) -> Bool {
+        guard let data = try? Shell.run(hdiutil, ["isencrypted", "-plist", image.path]),
+              let plist = try? Shell.plist(data) else { return false }
+        return plist["encrypted"] as? Bool ?? false
+    }
+
+    /// What `-stdinpass` reads: the password, ended by a NUL.
+    static func passphrase(_ password: String) -> Data { Data(password.utf8) + [0] }
 
     /// Mounts an image and returns where. Never assumes `/Volumes/<name>`:
     /// macOS appends " 1" when that's taken. `mountRoot` mounts it elsewhere,
     /// out of Finder's sidebar — for the tests.
-    public static func attach(_ image: URL, mountRoot: URL? = nil) throws -> URL {
+    public static func attach(_ image: URL, mountRoot: URL? = nil, password: String? = nil) throws -> URL {
         // Already attached: attaching again makes a second attachment of the
         // same bundle, and detaching either takes the real mount down.
         if let mounted = mountPoint(of: image) { return mounted }
         var args = ["attach", "-plist"]
         if let mountRoot { args += ["-mountroot", mountRoot.path, "-nobrowse"] }
+        if password != nil {
+            args.append("-stdinpass")
+        } else if isEncrypted(image) {
+            throw PasswordNeeded()
+        }
         args.append(image.path)
-        let plist = try Shell.plist(try Shell.run(hdiutil, args))
+        let output: Data
+        do {
+            output = try Shell.run(hdiutil, args, input: password.map(passphrase))
+        } catch let error as SetupError where password != nil && error.message.contains("Authentication error") {
+            throw SetupError("That password isn't right.")
+        }
+        let plist = try Shell.plist(output)
         let entities = plist["system-entities"] as? [[String: Any]] ?? []
         guard let mount = entities.compactMap({ $0["mount-point"] as? String }).first else {
             throw SetupError("The disk image opened, but macOS didn't say where.")
@@ -69,14 +96,20 @@ public enum DiskImages {
 /// Runs a system tool and returns what it printed.
 enum Shell {
     @discardableResult
-    static func run(_ tool: String, _ arguments: [String]) throws -> Data {
+    static func run(_ tool: String, _ arguments: [String], input: Data? = nil) throws -> Data {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tool)
         process.arguments = arguments
         let out = Pipe(), err = Pipe()
         process.standardOutput = out
         process.standardError = err
+        let stdin = Pipe()
+        process.standardInput = input == nil ? FileHandle.nullDevice : stdin
         try process.run()
+        if let input {
+            stdin.fileHandleForWriting.write(input)
+            try? stdin.fileHandleForWriting.close()
+        }
         // Both pipes read at once, so neither can fill up and stall the tool.
         var errors = Data()
         let group = DispatchGroup()

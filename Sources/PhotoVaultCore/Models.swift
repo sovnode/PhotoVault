@@ -144,20 +144,38 @@ public enum PhotoOrder: String, Sendable, CaseIterable {
     /// The file's creation date, as Finder shows it.
     case created
     case name
+    /// The order photos were added to an album. Albums only.
+    case added
+    /// Videos by how long they play; a photo counts as no length at all.
+    case length
+    /// A shuffle, the same each time the view is shown until it's chosen again
+    /// (or shuffled again with the arrow button).
+    case random
 
     public var label: String {
         switch self {
         case .date: return "Date Taken"
         case .created: return "Date Created"
         case .name: return "File Name"
+        case .added: return "Album Order"
+        case .length: return "Length"
+        case .random: return "Random"
         }
+    }
+
+    /// The orders the Sort menu offers in a view: Album Order only in an album.
+    public static func choices(for scope: LibraryScope) -> [PhotoOrder] {
+        if case .album = scope { return [.added, .date, .created, .name, .length, .random] }
+        return [.date, .created, .name, .length, .random]
     }
 
     /// What each direction is called, for the button that flips it.
     public func directionLabel(ascending: Bool) -> String {
         switch self {
         case .name: return ascending ? "A to Z" : "Z to A"
-        case .date, .created: return ascending ? "Oldest first" : "Newest first"
+        case .date, .created, .added: return ascending ? "Oldest first" : "Newest first"
+        case .length: return ascending ? "Shortest first" : "Longest first"
+        case .random: return "Shuffled"
         }
     }
 
@@ -170,15 +188,43 @@ public enum PhotoOrder: String, Sendable, CaseIterable {
     }
 }
 
+/// The name a copied album gets: "Beach (copy)", then "Beach (copy 2)" if
+/// that's taken, and so on.
+public enum CopyName {
+    public static func of(_ name: String, among taken: [String]) -> String {
+        let used = Set(taken.map { $0.lowercased() })
+        let first = "\(name) (copy)"
+        if !used.contains(first.lowercased()) { return first }
+        var n = 2
+        while used.contains("\(name) (copy \(n))".lowercased()) { n += 1 }
+        return "\(name) (copy \(n))"
+    }
+}
+
 /// A view's order, and which way it runs.
 public struct SortSetting: Hashable, Sendable {
     public var order: PhotoOrder
     /// Oldest first, or A to Z.
     public var ascending: Bool
+    /// Which shuffle Random shows: a new one each time it's chosen.
+    public var seed: UInt64
 
-    public init(order: PhotoOrder, ascending: Bool = true) {
+    public init(order: PhotoOrder, ascending: Bool = true, seed: UInt64 = 0) {
         self.order = order
         self.ascending = ascending
+        self.seed = seed
+    }
+}
+
+/// A shuffle that's the same every time for the same seed: Random's order
+/// doesn't jump about as the view reloads.
+public enum Shuffle {
+    public static func key(_ id: Int64, seed: UInt64) -> UInt64 {
+        // SplitMix64's finaliser: every bit of the id and seed moves the result.
+        var z = UInt64(bitPattern: id) &+ seed &+ 0x9E37_79B9_7F4A_7C15
+        z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z >> 31)
     }
 }
 
@@ -352,18 +398,47 @@ public enum LibraryScope: Hashable, Sendable {
     /// `Photos/2019`.
     case folder(String)
 
-    /// Whether a sort setting applies: everywhere but an album, which keeps
-    /// its own order.
-    public var followsSortOrder: Bool { sortKey != nil }
+    /// Whether a sort setting applies — everywhere, since albums gained the
+    /// Sort menu (with Album Order) in 1.5.0.
+    public var followsSortOrder: Bool { true }
 
     /// Which sort setting the view follows. The library has one — All Media and
-    /// every folder in it, Favorites and the Trash — and each smart album
-    /// remembers its own. Nil for an album.
-    public var sortKey: String? {
+    /// every folder in it, Favorites and the Trash — and each album and smart
+    /// album remembers its own.
+    public var sortKey: String {
         switch self {
-        case .album: return nil
+        case .album(let id): return "sort.album.\(id)"
         case .smart(let id): return "sort.smart.\(id)"
         case .all, .favorites, .trash, .folder: return "sort"
+        }
+    }
+
+    public var isAlbum: Bool {
+        if case .album = self { return true }
+        return false
+    }
+
+    /// Where the view's remembered place — the photo at the top of the screen
+    /// when it was last looked at — is kept. One per view.
+    /// The place for this view with `filter` applied. All, Photos and Videos
+    /// each keep their own: a photo hidden by the filter can't be a place, and
+    /// the filtered grid's top mustn't replace the unfiltered one's.
+    public func placeKey(_ filter: MediaFilter) -> String {
+        switch filter {
+        case .all: return placeKey
+        case .photos: return placeKey + ".photos"
+        case .videos: return placeKey + ".videos"
+        }
+    }
+
+    public var placeKey: String {
+        switch self {
+        case .all: return "place.all"
+        case .favorites: return "place.favorites"
+        case .trash: return "place.trash"
+        case .folder(let path): return "place.folder.\(path)"
+        case .album(let id): return "place.album.\(id)"
+        case .smart(let id): return "place.smart.\(id)"
         }
     }
 }

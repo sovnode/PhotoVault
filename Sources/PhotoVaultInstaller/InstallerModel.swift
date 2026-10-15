@@ -43,6 +43,12 @@ final class InstallerModel: ObservableObject {
     @Published var name = "PhotoVault"
     @Published var folder = FileManager.default.homeDirectoryForCurrentUser
     @Published var size = VaultSetup.defaultSize
+    /// Protect with a password: the disk image is encrypted.
+    @Published var protect = false
+    @Published var password = ""
+    @Published var confirmation = ""
+    /// Whether the vault just created is protected, for the done screen.
+    private var createdProtected = false
 
     // An existing vault
     @Published var vaults: [ExistingVault] = []
@@ -50,6 +56,9 @@ final class InstallerModel: ObservableObject {
     /// The name of a vault being opened.
     @Published var opening: String?
     @Published var chooseProblem: String?
+    /// A protected vault that isn't open, waiting for its password.
+    @Published var locked: URL?
+    @Published var unlockPassword = ""
 
     // Working
     @Published var workTitle = ""
@@ -157,11 +166,6 @@ final class InstallerModel: ObservableObject {
             facts.append(Fact(kind: .fine, text: "PhotoVault isn't on it yet."))
         }
         facts.append(Fact(kind: .fine, text: vault.hasCatalog ? "Its photos, albums and tags stay as they are." : "Its photos stay as they are."))
-        switch vault.joyTagVersion {
-        case nil: facts.append(Fact(kind: .fine, text: "JoyTag is added, to tag its photos automatically (\(Self.bytes(joyTagBytes)))."))
-        case joyTagVersion?: facts.append(Fact(kind: .fine, text: "JoyTag, which tags its photos automatically, is on it already."))
-        case let other?: facts.append(Fact(kind: .fine, text: "JoyTag \(other) is replaced with \(joyTagVersion) (\(Self.bytes(joyTagBytes)))."))
-        }
         if vault.photoVaultIsOpen {
             facts.append(Fact(kind: .note, text: "PhotoVault is open from it. The installer quits it first; a scan or tagging run carries on when it's next opened."))
         }
@@ -191,17 +195,22 @@ final class InstallerModel: ObservableObject {
 
     /// A vault chosen in the panel or dropped on the window: its disk image
     /// is opened, to see what's on it.
-    func choose(_ url: URL) {
+    func choose(_ url: URL, password: String? = nil) {
         guard !isPreview, opening == nil, phase == .choosing else { return }
         mode = .install
         chooseProblem = nil
         opening = DiskImages.isDiskImage(url) ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
         DispatchQueue.global(qos: .userInitiated).async {
-            let result = Result { try VaultSetup.open(url).vault }
+            let result = Result { try VaultSetup.open(url, password: password).vault }
             DispatchQueue.main.async {
                 self.opening = nil
                 switch result {
+                case .failure(is PasswordNeeded):
+                    self.locked = url
+                    self.unlockPassword = ""
                 case .success(let vault):
+                    self.locked = nil
+                    self.unlockPassword = ""
                     if vault.image == nil, !self.chosenByHand.contains(vault.mountPoint) { self.chosenByHand.append(vault.mountPoint) }
                     self.show(self.vaults.filter { $0.mountPoint != vault.mountPoint } + [vault])
                     self.chosenMount = vault.mountPoint
@@ -210,6 +219,14 @@ final class InstallerModel: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Opens the locked vault with the password typed. Passed on and forgotten.
+    func unlock() {
+        guard let url = locked, !unlockPassword.isEmpty else { return }
+        let password = unlockPassword
+        unlockPassword = ""
+        choose(url, password: password)
     }
 
     /// Looks again for vaults on mounted disk images.
@@ -238,16 +255,21 @@ final class InstallerModel: ObservableObject {
 
     // MARK: - Either
 
-    /// JoyTag's model runs on macOS 15 and later. A vault set up on an older
-    /// Mac can still carry it, for when it's opened on a newer one.
-    var joyTagRunsHere: Bool {
-        ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 15, minorVersion: 0, patchVersion: 0))
+    /// Why the password can't be used yet, or nil.
+    var passwordProblem: String? {
+        guard protect else { return nil }
+        if password.isEmpty { return "Choose a password." }
+        if confirmation != password { return confirmation.isEmpty ? "Type it again to confirm it." : "The two passwords don't match." }
+        return nil
     }
+
+    /// Shown, not enforced: a short password is easy to guess.
+    var passwordIsShort: Bool { protect && !password.isEmpty && password.count < 8 }
 
     var canStart: Bool {
         guard payload != nil, phase == .choosing, opening == nil else { return false }
         switch mode {
-        case .create: return nameProblem == nil
+        case .create: return nameProblem == nil && passwordProblem == nil
         case .install: return chosen != nil
         }
     }
@@ -273,11 +295,16 @@ final class InstallerModel: ObservableObject {
         switch mode {
         case .create:
             let (name, folder, size) = (trimmedName, folder, size)
+            let password = protect ? password : nil
+            // Passed on to hdiutil and forgotten: nothing keeps it.
+            self.password = ""
+            confirmation = ""
+            createdProtected = password != nil
             workTitle = "Creating “\(name)”"
             failure = "The vault couldn't be created"
             plan = [.creating, .opening, .installingApp]
             work = { progress in
-                try VaultSetup.create(name: name, in: folder, size: size, payload: payload, progress: progress)
+                try VaultSetup.create(name: name, in: folder, size: size, payload: payload, password: password, progress: progress)
             }
         case .install:
             guard let vault = chosen else { return }
@@ -345,16 +372,15 @@ final class InstallerModel: ObservableObject {
         var lines: [String] = []
         if let image = report.createdImage {
             lines.append("It's open in Finder as a disk called “\(report.mountPoint.lastPathComponent)”. The disk image it lives in is “\(image.lastPathComponent)”, in \(Self.place(image.deletingLastPathComponent()).lowercasedFirst).")
+            if createdProtected {
+                lines.append("It's protected with a password: macOS asks for it each time the vault is opened. If the password is forgotten, the photos can't be recovered.")
+            }
             return lines
         }
         switch report.replacedVersion {
         case nil: break
         case report.version?: lines.append("A fresh copy replaced the one that was there.")
         case let old?: lines.append("It replaced PhotoVault \(old).")
-        }
-        switch report.joyTag {
-        case .installed(let v): lines.append("JoyTag \(v) is on it, to tag its photos automatically.")
-        case .alreadyThere: lines.append("JoyTag was there already.")
         }
         if report.tagGroups == .renamed {
             lines.append("Its Tag Groups.txt is hidden now, as .Tag Groups.txt. To edit it, show hidden files in Finder: press ⇧⌘ and the full stop key.")

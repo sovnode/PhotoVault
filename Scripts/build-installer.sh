@@ -113,7 +113,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/PhotoVaultInstaller"
 cp Resources/Installer-Info.plist "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion $BUILD" "$APP/Contents/Info.plist"
-cp Resources/Icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+# Its own, generic icon (Scripts/make-installer-icon.swift): it isn't PhotoVault.
+cp Resources/Icon/InstallerIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 mv "$STAGE" "$APP/Contents/Resources/Payload"
 

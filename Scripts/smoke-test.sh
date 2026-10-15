@@ -69,8 +69,13 @@ idle_cpu_percent() {
     echo $(( (b - a) / 5 ))
 }
 
+# PHOTOVAULT_SMOKE_SCREEN=2 Scripts/smoke-test.sh opens every window on the
+# second display, out of the way of someone working on the main one.
+SCREEN="${PHOTOVAULT_SMOKE_SCREEN:+PHOTOVAULT_SMOKE_SCREEN=$PHOTOVAULT_SMOKE_SCREEN}"
+
 launch() {  # launch [ENV=VALUE ...]
-    env "$@" "$MOUNT/PhotoVault.app/Contents/MacOS/PhotoVault" >>"$WORK/app.log" 2>&1 &
+    # shellcheck disable=SC2086  # $SCREEN is empty or one VAR=value
+    env $SCREEN "$@" "$MOUNT/PhotoVault.app/Contents/MacOS/PhotoVault" >>"$WORK/app.log" 2>&1 &
     PID=$!
 }
 
@@ -81,7 +86,7 @@ launch() {  # launch [ENV=VALUE ...]
 # -n: always this vault's copy, even if a PhotoVault is open on another vault.
 launch_like_finder() {  # launch_like_finder [ENV=VALUE ...]
     envs=""
-    for kv in "$@"; do envs="$envs --env $kv"; done
+    for kv in $SCREEN "$@"; do envs="$envs --env $kv"; done
     # shellcheck disable=SC2086  # $envs is meant to split into separate arguments
     open -n $envs --stdout "$WORK/app.log" --stderr "$WORK/app-stderr.log" -a "$MOUNT/PhotoVault.app" || return 1
     t=0; PID=""
@@ -425,6 +430,40 @@ if [ -f tools/joytag/package/JoyTag/manifest.json ]; then
 else
     echo "JoyTag: skipped — not packaged in this checkout (Scripts/joytag/package.sh)"
 fi
+
+# ------------------------------------------------------------------ places and playback
+
+echo "Last launch: each view keeps its place; Repeat, Play Next, one speed, a slideshow"
+MARK=$(wc -l < "$WORK/app.log" | tr -d ' ')
+launch PHOTOVAULT_SMOKE_PLACES=1 PHOTOVAULT_SMOKE_PLAYBACK=1
+t=0
+while ! tail -n +$((MARK + 1)) "$WORK/app.log" | grep -q "closing the viewer ended"; do
+    [ "$t" -ge 90 ] && break
+    sleep 1; t=$((t + 1))
+done
+LOG="$(tail -n +$((MARK + 1)) "$WORK/app.log")"
+said() { printf '%s\n' "$LOG" | sed -n "s/^smoke: $1/\\1/p" | head -1; }
+expect "a view comes back where it was left" "$(said 'place kept: \([a-z]*\).*')" "yes"
+expect "a folder opens at its own top, not where another view was" "$(said 'a folder opens at its top: \([a-z]*\)')" "yes"
+expect "showing only videos and back keeps a view's place" "$(said 'place kept through a filter: \([a-z]*\).*')" "yes"
+expect "a view keeps its place when come back to with a filter on" "$(said 'place kept with a filter on: \([a-z]*\).*')" "yes"
+MOVES="$(said 'slideshow moved on \([0-9]*\) times.*')"
+case "$MOVES" in 2|3) pass "a slideshow moves on after each photo's time ($MOVES moves in 5 s at 2 s)" ;;
+                 *) fail "a slideshow moves on after each photo's time (got '$MOVES' moves in 5 s at 2 s)" ;; esac
+expect "the display stays awake during a slideshow" "$(said 'slideshow moved on [0-9]* times; display kept awake: \([a-z]*\)')" "yes"
+LOOPS="$(printf '%s\n' "$LOG" | grep -c "video ended and looped")"
+[ "$LOOPS" -ge 1 ] && pass "Repeat loops a video ($LOOPS times)" || fail "Repeat loops a video"
+expect "a speed chosen in the player becomes every video's" "$(said 'video speed taken from the player: \(.*\)')" "1.5"
+expect "Play Next moves on when a video ends" "$(said 'moved on after the video ended: \([a-z]*\)')" "yes"
+expect "a zoomed video keeps its zoom while it loops" \
+    "$(printf '%s\n' "$LOG" | grep -A1 'smoke: after looping,' | sed -n 's/^smoke: video zoom //p')" "2.5"
+expect "a video opened again starts unzoomed" \
+    "$(printf '%s\n' "$LOG" | grep -A1 'smoke: opened again,' | sed -n 's/^smoke: video zoom //p')" "1.0"
+expect "closing the viewer ends the slideshow" "$(said 'closing the viewer ended the slideshow: \([a-z]*\)')" "yes"
+expect "the video speed is kept in the vault's catalog" "$(sql "SELECT value FROM meta WHERE key = 'setting.video.speed';")" "1.5"
+expect "the slideshow time is kept in the vault's catalog" "$(sql "SELECT value FROM meta WHERE key = 'setting.viewer.interval';")" "2.0"
+if stop_app; then pass "quit promptly"; else fail "quit promptly"; fi
+expect "All Media's place is kept in the vault's catalog" "$(sql "SELECT COUNT(*) FROM meta WHERE key = 'setting.place.all';")" "1"
 
 # ------------------------------------------------------------------ eject
 

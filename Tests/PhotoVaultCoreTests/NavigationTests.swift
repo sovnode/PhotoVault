@@ -255,13 +255,23 @@ struct StoreDetailsTests {
 
 @Suite("Where the sort setting applies")
 struct SortScopeTests {
-    @Test func everythingButAlbumsHasASort() {
-        #expect(LibraryScope.all.followsSortOrder)
-        #expect(LibraryScope.favorites.followsSortOrder)
-        #expect(LibraryScope.trash.followsSortOrder)
-        #expect(LibraryScope.smart(1).followsSortOrder)
-        #expect(LibraryScope.folder("Photos/2019").followsSortOrder, "a folder can be sorted too")
-        #expect(!LibraryScope.album(1).followsSortOrder, "an album has its own order")
+    @Test func everyViewHasASortAndAlbumsCanKeepTheirOwnOrder() {
+        for scope in [LibraryScope.all, .favorites, .trash, .smart(1), .folder("Photos/2019"), .album(1)] {
+            #expect(scope.followsSortOrder, "\(scope)")
+        }
+        #expect(PhotoOrder.choices(for: .album(1)) == [.added, .date, .created, .name, .length, .random], "Album Order, in albums only")
+        #expect(PhotoOrder.choices(for: .all) == [.date, .created, .name, .length, .random])
+        #expect(PhotoOrder.choices(for: .folder("Photos")) == [.date, .created, .name, .length, .random])
+        #expect(PhotoOrder.choices(for: .smart(1)) == [.date, .created, .name, .length, .random])
+    }
+
+    @Test func eachViewHasAPlaceOfItsOwn() {
+        let scopes: [LibraryScope] = [.all, .favorites, .trash, .folder("Photos"), .folder("Photos/2019"),
+                                      .album(1), .album(2), .smart(1), .smart(2)]
+        #expect(Set(scopes.map(\.placeKey)).count == scopes.count)
+        let keys = scopes.flatMap { scope in MediaFilter.allCases.map(scope.placeKey) }
+        #expect(Set(keys).count == scopes.count * 3, "All, Photos and Videos each keep their own place")
+        #expect(LibraryScope.album(1).placeKey(.all) == LibraryScope.album(1).placeKey, "All is the view's own place")
     }
 
     @Test func theLibrarySharesOneSortAndEachSmartAlbumHasItsOwn() {
@@ -270,7 +280,7 @@ struct SortScopeTests {
         }
         #expect(LibraryScope.smart(3).sortKey == "sort.smart.3")
         #expect(LibraryScope.smart(4).sortKey != LibraryScope.smart(3).sortKey)
-        #expect(LibraryScope.album(1).sortKey == nil)
+        #expect(LibraryScope.album(1).sortKey == "sort.album.1")
     }
 
     @Test func directionsReadNaturally() {
@@ -278,7 +288,10 @@ struct SortScopeTests {
         #expect(PhotoOrder.created.directionLabel(ascending: false) == "Newest first")
         #expect(PhotoOrder.name.directionLabel(ascending: true) == "A to Z")
         #expect(PhotoOrder.name.directionLabel(ascending: false) == "Z to A")
-        #expect(PhotoOrder.allCases.map(\.label) == ["Date Taken", "Date Created", "File Name"])
+        #expect(PhotoOrder.allCases.map(\.label) == ["Date Taken", "Date Created", "File Name", "Album Order", "Length", "Random"])
+        #expect(PhotoOrder.length.directionLabel(ascending: true) == "Shortest first")
+        #expect(PhotoOrder.length.directionLabel(ascending: false) == "Longest first")
+        #expect(PhotoOrder.added.directionLabel(ascending: true) == "Oldest first")
     }
 }
 
@@ -312,6 +325,37 @@ struct SortDirectionTests {
         #expect(try names(.folder("Photos/2019"), .name, false) == ["a_10.jpg", "a_9.jpg", "a_8.jpg"])
     }
 
+    @Test func lengthPutsPhotosFirstAsIfTheyHadNoLengthAtAll() throws {
+        let catalog = try Catalog(url: vault.catalogFile)
+        defer { catalog.closeCleanly() }
+        let long = try catalog.upsertPhoto(PhotoItem(relPath: "Photos/long.mov", mtime: 1, mediaType: .video))
+        let short = try catalog.upsertPhoto(PhotoItem(relPath: "Photos/short.mov", mtime: 1, mediaType: .video))
+        _ = try catalog.upsertPhoto(PhotoItem(relPath: "Photos/photo.jpg", mtime: 1))
+        try catalog.setDetails(id: long, width: 1, height: 1, orientation: 1, capturedAt: 1, duration: 90)
+        try catalog.setDetails(id: short, width: 1, height: 1, orientation: 1, capturedAt: 1, duration: 4)
+        func names(_ ascending: Bool) throws -> [String] {
+            try catalog.items(scope: .all, filter: .all, sort: .length, ascending: ascending).map(\.displayName)
+        }
+        #expect(try names(true) == ["photo.jpg", "short.mov", "long.mov"])
+        #expect(try names(false) == ["long.mov", "short.mov", "photo.jpg"])
+    }
+
+    @Test func randomIsTheSameShuffleUntilItsShuffledAgain() throws {
+        let catalog = try Catalog(url: vault.catalogFile)
+        defer { catalog.closeCleanly() }
+        for i in 1...40 { try catalog.upsertPhoto(PhotoItem(relPath: "Photos/p\(i).jpg", mtime: 1)) }
+        func order(_ seed: UInt64, _ scope: LibraryScope = .all) throws -> [Int64] {
+            try catalog.items(scope: scope, filter: .all, sort: .random, seed: seed).map(\.id)
+        }
+        let byName = try catalog.items(scope: .all, filter: .all, sort: .name).map(\.id)
+        let first = try order(17)
+        #expect(Set(first) == Set(byName), "every photo, once")
+        #expect(first != byName && first != byName.sorted(), "shuffled")
+        #expect(try order(17) == first, "the same shuffle while the seed is the same")
+        #expect(try order(18) != first, "another seed, another shuffle")
+        #expect(try order(17, .folder("Photos")) == first, "folders shuffle the same way")
+    }
+
     @Test func aScanRecordsWhenEachFileWasCreated() async throws {
         let url = try vault.writeImage("2019/a.jpg")
         let created = try #require(try url.resourceValues(forKeys: [.creationDateKey]).creationDate)
@@ -338,12 +382,12 @@ struct SortDirectionTests {
         sqlite3_close(db)
         // (The migration adds the column again: drop it first, as v4 had none.)
         try #require(sqlite3_open(vault.catalogFile.path, &db) == SQLITE_OK)
-        try #require(sqlite3_exec(db, "ALTER TABLE photo DROP COLUMN created_at;", nil, nil, nil) == SQLITE_OK)
+        try #require(sqlite3_exec(db, "ALTER TABLE photo DROP COLUMN created_at; ALTER TABLE smart_album DROP COLUMN sort_index;", nil, nil, nil) == SQLITE_OK)
         sqlite3_close(db)
 
         let catalog = try Catalog(url: vault.catalogFile)
         defer { catalog.closeCleanly() }
-        #expect(try catalog.userVersion() == 5)
+        #expect(try catalog.userVersion() == Catalog.schemaVersion)
         let rows = Dictionary(uniqueKeysWithValues: try catalog.items(scope: .all, filter: .all).map { ($0.relPath, $0) })
         #expect(abs((rows["Photos/old.jpg"]?.createdAt ?? 0) - created.timeIntervalSince1970) < 1)
         #expect(rows["Photos/gone.jpg"]?.createdAt == nil, "a file that isn't there has none yet")
@@ -358,8 +402,12 @@ struct SortDirectionTests {
 
         let start = try #require(try await store.sortSetting(for: .all))
         #expect(start.ascending, "oldest first, or A to Z, to begin with")
-        #expect(try await store.sortSetting(for: .album(1)) == nil, "an album keeps its own order")
+        #expect(try await store.sortSetting(for: .album(1)) == SortSetting(order: .added, ascending: true),
+                "an album starts in Album Order")
 
+        await store.setSortSetting(SortSetting(order: .random, ascending: true, seed: 42), for: .all)
+        #expect(try await store.sortSetting(for: .folder("Photos")) == SortSetting(order: .random, ascending: true, seed: 42),
+                "the shuffle is kept, so the order doesn't change on its own")
         await store.setSortSetting(SortSetting(order: .created, ascending: false), for: .folder("Photos/2019"))
         for scope in [LibraryScope.all, .folder("Photos"), .favorites, .trash] {
             #expect(try await store.sortSetting(for: scope) == SortSetting(order: .created, ascending: false),
@@ -452,5 +500,133 @@ struct PhotoMetadataTests {
         try catalog.addToAlbum(albumID: trip, photoIDs: [id])
         try catalog.addToAlbum(albumID: best, photoIDs: [id])
         #expect(try catalog.albumNames(containing: id) == ["Trip", "Best"])
+    }
+}
+
+@Suite("Albums in order, and sorted", .serialized)
+struct AlbumOrderTests {
+    let vault: TestVault
+
+    init() throws { vault = try TestVault() }
+
+    @Test func albumsAndSmartAlbumsKeepTheOrderTheyWereDraggedInto() async throws {
+        let store = try Store(root: vault.root)
+        let a = try await store.createAlbum(named: "Beach")
+        let b = try await store.createAlbum(named: "Arctic")
+        let c = try await store.createAlbum(named: "City")
+        #expect(try await store.albums().map(\.id) == [a, b, c], "in the order they were made")
+        try await store.setAlbumOrder([c, a, b])
+        #expect(try await store.albums().map(\.id) == [c, a, b])
+
+        let x = try await store.createSmartAlbum(name: "Zebra", predicate: "1")
+        let y = try await store.createSmartAlbum(name: "Apple", predicate: "1")
+        #expect(try await store.smartAlbums().map(\.id) == [x, y], "new ones go at the end, not by name")
+        try await store.setSmartAlbumOrder([y, x])
+        #expect(try await store.smartAlbums().map(\.id) == [y, x])
+        let z = try await store.createSmartAlbum(name: "Middle", predicate: "1")
+        #expect(try await store.smartAlbums().map(\.id) == [y, x, z])
+        await store.close()
+
+        let reopened = try Store(root: vault.root)
+        #expect(try await reopened.albums().map(\.id) == [c, a, b], "kept in the vault's catalog")
+        #expect(try await reopened.smartAlbums().map(\.id) == [y, x, z])
+        await reopened.close()
+    }
+
+    @Test func anOlderCatalogKeepsItsSmartAlbumsInTheOrderTheyWereShown() throws {
+        do {
+            let catalog = try Catalog(url: vault.catalogFile)
+            for name in ["beach", "Animals", "city"] { try catalog.createSmartAlbum(name: name, predicate: "1") }
+            catalog.closeCleanly()
+        }
+        var db: OpaquePointer?
+        try #require(sqlite3_open(vault.catalogFile.path, &db) == SQLITE_OK)
+        try #require(sqlite3_exec(db, "ALTER TABLE smart_album DROP COLUMN sort_index; PRAGMA user_version = 5;", nil, nil, nil) == SQLITE_OK)
+        sqlite3_close(db)
+
+        let catalog = try Catalog(url: vault.catalogFile)
+        defer { catalog.closeCleanly() }
+        #expect(try catalog.userVersion() == Catalog.schemaVersion)
+        #expect(try catalog.smartAlbums().map(\.name) == ["Animals", "beach", "city"], "alphabetical, as before")
+    }
+
+    @Test func anAlbumSortsEitherWayAndForgetsItsSettingsWhenDeleted() async throws {
+        let catalog = try Catalog(url: vault.catalogFile)
+        let first = try catalog.upsertPhoto(PhotoItem(relPath: "Photos/b.jpg", mtime: 1, createdAt: 200))
+        let second = try catalog.upsertPhoto(PhotoItem(relPath: "Photos/a.jpg", mtime: 1, createdAt: 100))
+        let album = try catalog.createAlbum(name: "Trip")
+        try catalog.addToAlbum(albumID: album, photoIDs: [first, second])
+        func names(_ sort: PhotoOrder, _ ascending: Bool) throws -> [String] {
+            try catalog.items(scope: .album(album), filter: .all, sort: sort, ascending: ascending).map(\.displayName)
+        }
+        #expect(try names(.added, true) == ["b.jpg", "a.jpg"], "as added")
+        #expect(try names(.added, false) == ["a.jpg", "b.jpg"], "last added first")
+        #expect(try names(.name, true) == ["a.jpg", "b.jpg"])
+        #expect(try names(.created, false) == ["b.jpg", "a.jpg"])
+        catalog.closeCleanly()
+
+        let store = try Store(root: vault.root)
+        await store.setSortSetting(SortSetting(order: .name, ascending: false), for: .album(album))
+        await store.setSetting(LibraryScope.album(album).placeKey, String(second))
+        #expect(try await store.sortSetting(for: .album(album)) == SortSetting(order: .name, ascending: false))
+        try await store.deleteAlbum(album)
+        #expect(await store.setting("sort.album.\(album).order") == nil)
+        #expect(await store.setting(LibraryScope.album(album).placeKey) == nil, "its place goes with it")
+        await store.close()
+    }
+}
+
+@Suite("Duplicating albums", .serialized)
+struct DuplicateAlbumTests {
+    let vault: TestVault
+
+    init() throws { vault = try TestVault() }
+
+    @Test func copiesAreNamedSoTheyCanBeToldApart() {
+        #expect(CopyName.of("Beach", among: ["Beach"]) == "Beach (copy)")
+        #expect(CopyName.of("Beach", among: ["Beach", "Beach (copy)"]) == "Beach (copy 2)")
+        #expect(CopyName.of("Beach", among: ["Beach", "beach (COPY)", "Beach (copy 2)"]) == "Beach (copy 3)")
+    }
+
+    @Test func anAlbumsCopyHasItsPhotosInOrderAndSitsJustBelowIt() async throws {
+        let catalog = try Catalog(url: vault.catalogFile)
+        let a = try catalog.upsertPhoto(PhotoItem(relPath: "Photos/a.jpg", mtime: 1))
+        let b = try catalog.upsertPhoto(PhotoItem(relPath: "Photos/b.jpg", mtime: 1))
+        catalog.closeCleanly()
+
+        let store = try Store(root: vault.root)
+        let beach = try await store.createAlbum(named: "Beach")
+        let garden = try await store.createAlbum(named: "Garden")
+        try await store.addToAlbum(beach, photoIDs: [b, a])
+        await store.setSortSetting(SortSetting(order: .name, ascending: false), for: .album(beach))
+
+        let copy = try await store.duplicateAlbum(beach)
+        let albums = try await store.albums()
+        #expect(albums.map(\.id) == [beach, copy, garden], "listed just after the original")
+        #expect(albums.first { $0.id == copy }?.name == "Beach (copy)")
+        #expect(try await store.items(scope: .album(copy), filter: .all, sort: .added).map(\.id) == [b, a],
+                "the same photos, in the same order")
+        #expect(try await store.sortSetting(for: .album(copy)) == SortSetting(order: .name, ascending: false), "and the same sort")
+        #expect(try await store.duplicateAlbum(beach) != copy)
+        #expect(try await store.albums().map(\.name).contains("Beach (copy 2)"))
+
+        // The original is untouched by changes to its copy.
+        try await store.removeFromAlbum(copy, photoIDs: [a])
+        #expect(try await store.albumCount(beach) == 2)
+        await store.close()
+    }
+
+    @Test func aSmartAlbumsCopyHasItsRules() async throws {
+        let store = try Store(root: vault.root)
+        var rules = TagRules()
+        rules.cycle(.tag, "sky")
+        let sky = try await store.createSmartAlbum(name: "Sky", rules: rules)
+        let other = try await store.createSmartAlbum(name: "Other", predicate: "1")
+        let copy = try await store.duplicateSmartAlbum(sky)
+        let all = try await store.smartAlbums()
+        #expect(all.map(\.id) == [sky, copy, other])
+        #expect(all.first { $0.id == copy }?.name == "Sky (copy)")
+        #expect(all.first { $0.id == copy }?.rules == rules)
+        await store.close()
     }
 }

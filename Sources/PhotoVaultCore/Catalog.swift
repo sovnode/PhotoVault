@@ -13,7 +13,7 @@ public final class Catalog {
     private var db: OpaquePointer?
     public let url: URL
 
-    public static let schemaVersion: Int32 = 5
+    public static let schemaVersion: Int32 = 6
 
     // MARK: - Lifecycle
 
@@ -142,6 +142,12 @@ public final class Catalog {
             }
             try exec("PRAGMA user_version = 5;")
         }
+        if current < 6 {
+            try transaction {
+                try exec(Catalog.migrationV6)
+            }
+            try exec("PRAGMA user_version = 6;")
+        }
         // The pragma is the only source of truth for what shape the file is in.
     }
 
@@ -212,6 +218,17 @@ public final class Catalog {
     ALTER TABLE classification ADD COLUMN label TEXT;
     ALTER TABLE photo ADD COLUMN tags_read REAL;
     ALTER TABLE smart_album ADD COLUMN rules TEXT;
+    """
+
+    /// v6: smart albums in an order of their own, set by dragging in the
+    /// sidebar — starting from the alphabetical order they were shown in, so
+    /// nothing moves on upgrade.
+    static let migrationV6 = """
+    ALTER TABLE smart_album ADD COLUMN sort_index INTEGER NOT NULL DEFAULT 0;
+    UPDATE smart_album SET sort_index = 1 + (
+      SELECT COUNT(*) FROM smart_album s2
+      WHERE s2.name COLLATE NOCASE < smart_album.name COLLATE NOCASE
+         OR (s2.name COLLATE NOCASE = smart_album.name COLLATE NOCASE AND s2.id < smart_album.id));
     """
 
     /// v5: each file's creation date, for sorting by Date Created.
@@ -633,7 +650,7 @@ public final class Catalog {
     // MARK: - Queries
 
     public func items(scope: LibraryScope, filter: MediaFilter, sort: PhotoOrder = .date, ascending: Bool = true,
-                      includeMissing: Bool = false, groups: TagGroups = TagGroups(text: "")) throws -> [PhotoItem] {
+                      seed: UInt64 = 0, includeMissing: Bool = false, groups: TagGroups = TagGroups(text: "")) throws -> [PhotoItem] {
         var joins = ""
         var clauses: [String] = []
         var scopeID: Int64?
@@ -679,16 +696,19 @@ public final class Catalog {
         if !includeMissing { clauses.append("p.missing = 0") }
 
         let whereSQL = clauses.isEmpty ? "" : "WHERE " + clauses.joined(separator: " AND ")
-        // An album keeps its own order. Everything else follows its sort, either
-        // way round. Ties fall back to file name, the same way round; photos
-        // with no date at all come last whichever way the dates run.
+        // Every view follows its sort, either way round; an album can also keep
+        // the order photos were added in. Ties fall back to file name, the same
+        // way round; photos with no date at all come last whichever way the
+        // dates run.
         let way = ascending ? "ASC" : "DESC"
         let order: String
         switch (scope, sort) {
-        case (.album, _): order = "ap.position, p.sort_name, p.id"
-        case (_, .name): order = "p.sort_name \(way), p.rel_path \(way)"
+        case (.album, .added): order = "ap.position \(way), p.sort_name, p.id"
+        case (_, .name), (_, .added): order = "p.sort_name \(way), p.rel_path \(way)"
         case (_, .date): order = "p.captured_at IS NULL, p.captured_at \(way), p.sort_name \(way), p.id \(way)"
         case (_, .created): order = "p.created_at IS NULL, p.created_at \(way), p.sort_name \(way), p.id \(way)"
+        case (_, .length): order = "COALESCE(p.duration, 0) \(way), p.sort_name \(way), p.id \(way)"
+        case (_, .random): order = "p.id"
         }
         let cols = Catalog.photoColumns.split(separator: ",").map { "p.\($0.trimmingCharacters(in: .whitespaces))" }.joined(separator: ", ")
 
@@ -698,6 +718,9 @@ public final class Catalog {
         for (i, text) in texts.enumerated() { sqlite3_bind_text(stmt, Int32(i + 1), text, -1, SQLITE_TRANSIENT) }
         var out: [PhotoItem] = []
         while sqlite3_step(stmt) == SQLITE_ROW { out.append(readPhoto(stmt)) }
+        if sort == .random {
+            out.sort { Shuffle.key($0.id, seed: seed) < Shuffle.key($1.id, seed: seed) }
+        }
         return out
     }
 
@@ -745,6 +768,45 @@ public final class Catalog {
         sqlite3_bind_text(stmt, 1, name, -1, SQLITE_TRANSIENT)
         sqlite3_bind_int64(stmt, 2, id)
         try step(stmt)
+    }
+
+    /// Numbers `ids` 1, 2, 3… in `table`'s `sort_index`, in one transaction.
+    func setOrder(table: String, ids: [Int64]) throws {
+        precondition(table == "album" || table == "smart_album")
+        try transaction {
+            let stmt = try prepare("UPDATE \(table) SET sort_index = ? WHERE id = ?;")
+            defer { sqlite3_finalize(stmt) }
+            for (i, id) in ids.enumerated() {
+                sqlite3_reset(stmt)
+                sqlite3_bind_int(stmt, 1, Int32(i + 1))
+                sqlite3_bind_int64(stmt, 2, id)
+                try step(stmt)
+            }
+        }
+    }
+
+    /// A new album named `name` holding `id`'s photos in the same order.
+    public func duplicateAlbum(id: Int64, name: String) throws -> Int64 {
+        var copy: Int64 = 0
+        try transaction {
+            copy = try createAlbum(name: name)
+            let stmt = try prepare("""
+            INSERT INTO album_photo (album_id, photo_id, position)
+            SELECT ?, photo_id, position FROM album_photo WHERE album_id = ?;
+            """)
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_int64(stmt, 1, copy)
+            sqlite3_bind_int64(stmt, 2, id)
+            try step(stmt)
+        }
+        return copy
+    }
+
+    /// A new smart album named `name` with `id`'s rules (or predicate).
+    public func duplicateSmartAlbum(id: Int64, name: String) throws -> Int64 {
+        guard let original = try smartAlbum(id: id) else { throw VaultError.sqlite("no smart album \(id)") }
+        if let rules = original.rules { return try createSmartAlbum(name: name, rules: rules) }
+        return try createSmartAlbum(name: name, predicate: original.predicate)
     }
 
     public func deleteAlbum(id: Int64) throws {
@@ -823,7 +885,7 @@ public final class Catalog {
 
     @discardableResult
     public func createSmartAlbum(name: String, rules: TagRules) throws -> Int64 {
-        let stmt = try prepare("INSERT INTO smart_album (name, predicate, rules) VALUES (?, '', ?);")
+        let stmt = try prepare("INSERT INTO smart_album (name, predicate, rules, sort_index) VALUES (?, '', ?, (SELECT COALESCE(MAX(sort_index), 0) + 1 FROM smart_album));")
         defer { sqlite3_finalize(stmt) }
         sqlite3_bind_text(stmt, 1, name, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, try Catalog.encode(rules), -1, SQLITE_TRANSIENT)
@@ -853,7 +915,7 @@ public final class Catalog {
     }
 
     public func createSmartAlbum(name: String, predicate: String) throws -> Int64 {
-        let stmt = try prepare("INSERT INTO smart_album (name, predicate) VALUES (?, ?);")
+        let stmt = try prepare("INSERT INTO smart_album (name, predicate, sort_index) VALUES (?, ?, (SELECT COALESCE(MAX(sort_index), 0) + 1 FROM smart_album));")
         defer { sqlite3_finalize(stmt) }
         sqlite3_bind_text(stmt, 1, name, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, predicate, -1, SQLITE_TRANSIENT)
@@ -862,7 +924,7 @@ public final class Catalog {
     }
 
     public func smartAlbums() throws -> [SmartAlbum] {
-        let stmt = try prepare("SELECT id, name, predicate, rules FROM smart_album ORDER BY name COLLATE NOCASE;")
+        let stmt = try prepare("SELECT id, name, predicate, rules FROM smart_album ORDER BY sort_index, name COLLATE NOCASE;")
         defer { sqlite3_finalize(stmt) }
         var out: [SmartAlbum] = []
         while sqlite3_step(stmt) == SQLITE_ROW {

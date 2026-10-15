@@ -17,7 +17,9 @@ struct TagFilterPanel: View {
 
     @State private var rules = TagRules()
     @State private var name = ""
-    @State private var search = ""
+    /// The search, as matched: set a moment after typing pauses (see
+    /// `TagSearchField`), so the list below isn't redrawn on every key.
+    @State private var query = ""
     @State private var open: Set<String> = []
     @State private var showAll: Set<String> = []
     @State private var showRare = false
@@ -26,6 +28,10 @@ struct TagFilterPanel: View {
     @State private var unsaved = false
 
     private static let topN = 12
+    /// While searching, each group shows this many matches before "Show all":
+    /// a one-letter search matches thousands of tags, and drawing them all at
+    /// once is what made typing slow.
+    private static let searchCap = 40
     static let rareBelow = 3
 
     var body: some View {
@@ -44,8 +50,13 @@ struct TagFilterPanel: View {
             HStack(alignment: .top, spacing: 12) {
                 // Two columns, each scrolling on its own: what's chosen collects
                 // on the right, so the tag list never moves under the pointer.
-                ScrollView { browser.padding(.trailing, 8) }
-                    .frame(maxWidth: .infinity)
+                // The search box stays put above the list it searches.
+                VStack(alignment: .leading, spacing: 8) {
+                    TagSearchField(count: model.tagCounts.count, query: $query)
+                        .id(album.id)
+                    ScrollView { browser.padding(.trailing, 8) }
+                }
+                .frame(maxWidth: .infinity)
                 Divider()
                 ScrollView { summary }
                     .frame(width: 236)
@@ -61,12 +72,8 @@ struct TagFilterPanel: View {
 
     // MARK: - Tags
 
-    private var query: String { TagKey.key(search) }
-
     private var browser: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField("Search \(model.tagCounts.count) tags", text: $search)
-                .textFieldStyle(.roundedBorder)
             if model.tagCounts.isEmpty {
                 Text("No photo in this vault has tags yet.")
                     .font(.callout)
@@ -75,9 +82,12 @@ struct TagFilterPanel: View {
                 Text("Most used").font(.caption).foregroundStyle(.secondary)
                 FlowLayout { ForEach(model.mostUsedTags(Self.topN), id: \.key) { tagChip($0) } }
             }
-            ForEach(model.tagGroupLists) { group in groupView(group) }
+            // Lazily: groups scrolled out of sight cost nothing.
+            LazyVStack(alignment: .leading, spacing: 8) {
+                ForEach(model.tagGroupLists) { group in groupView(group) }
+            }
             if !query.isEmpty, noMatches {
-                Text("No tag matches “\(search)”.")
+                Text("No tag matches “\(query)”.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -121,12 +131,12 @@ struct TagFilterPanel: View {
                         .foregroundStyle(.secondary)
                 }
                 if isOpen {
-                    let expanded = !query.isEmpty || showAll.contains(group.name)
+                    let limit = showAll.contains(group.name) ? Int.max : (query.isEmpty ? Self.topN : Self.searchCap)
                     FlowLayout {
-                        ForEach(expanded ? matching : Array(matching.prefix(Self.topN)), id: \.key) { tagChip($0) }
+                        ForEach(Array(matching.prefix(limit)), id: \.key) { tagChip($0) }
                     }
                     .padding(.leading, 22)
-                    if query.isEmpty, matching.count > Self.topN {
+                    if matching.count > (query.isEmpty ? Self.topN : Self.searchCap) {
                         Button(showAll.contains(group.name) ? "Show fewer" : "Show all \(matching.count)") {
                             toggle(&showAll, group.name)
                         }
@@ -243,7 +253,7 @@ struct TagFilterPanel: View {
     private func load() {
         rules = album.rules ?? TagRules()
         name = album.name
-        search = ""
+        query = ""
         unsaved = false
     }
 
@@ -287,5 +297,25 @@ struct TagFilterPanel: View {
         commitName()
         flushSave()
         model.editingFilter = false
+    }
+}
+
+/// The tag search box, a view of its own so typing redraws only it. What's
+/// typed shows at once; the list follows 150 ms after typing pauses.
+private struct TagSearchField: View {
+    let count: Int
+    @Binding var query: String
+    @State private var text = ""
+
+    var body: some View {
+        TextField("Search \(count) tags", text: $text)
+            .textFieldStyle(.roundedBorder)
+            .task(id: text) {
+                let typed = text
+                if !typed.isEmpty { try? await Task.sleep(nanoseconds: 150_000_000) }
+                guard !Task.isCancelled else { return }
+                let key = TagKey.key(typed)
+                if key != query { query = key }
+            }
     }
 }

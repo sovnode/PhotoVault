@@ -161,7 +161,27 @@ struct CreateForm: View {
                 .fixedSize()
                 Note(text: "The most it can hold. The disk image takes only the space its photos use.")
             }
-            FormRow { JoyTagRow() }
+            FormRow(label: "Password:") {
+                Toggle("Protect with a password", isOn: $model.protect)
+                if model.protect {
+                    SecureField("Password", text: $model.password)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 280)
+                    SecureField("Type it again", text: $model.confirmation)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 280)
+                    if let problem = model.passwordProblem, !model.password.isEmpty {
+                        Note(text: problem, kind: .warning)
+                    } else if model.passwordIsShort {
+                        Note(text: "A password this short is easy to guess.", kind: .warning)
+                    }
+                    Note(text: "Without the password, nobody can open the vault or see its photos — on this Mac or any other. There's no way to recover a forgotten password: the photos would be lost with it. Keep it somewhere safe, such as a password manager.",
+                         kind: .warning)
+                    Note(text: "When you open the vault, macOS offers to remember the password in your keychain. That's convenient on your own Mac, but then anyone using your account can open the vault.")
+                } else {
+                    Note(text: "Anyone with the disk image can open the vault.")
+                }
+            }
         }
     }
 }
@@ -212,6 +232,19 @@ struct InstallForm: View {
                     }
                 }
             }
+            if let locked = model.locked {
+                FormRow(label: "Password:") {
+                    Note(text: "“\(locked.deletingPathExtension().lastPathComponent)” is protected with a password.")
+                    HStack(spacing: 8) {
+                        SecureField("Password", text: $model.unlockPassword)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 280)
+                            .onSubmit { model.unlock() }
+                        Button("Open") { model.unlock() }
+                            .disabled(model.unlockPassword.isEmpty)
+                    }
+                }
+            }
             if let problem = model.chooseProblem {
                 FormRow { Note(text: problem, kind: .warning) }
             }
@@ -228,7 +261,7 @@ struct InstallForm: View {
 }
 
 /// How wide the labels on the left of the forms are.
-let formLabelWidth: CGFloat = 64
+let formLabelWidth: CGFloat = 76
 
 /// A label on the left, and what it labels on the right.
 struct FormRow<Content: View>: View {
@@ -241,22 +274,6 @@ struct FormRow<Content: View>: View {
             VStack(alignment: .leading, spacing: 4) { content }
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-}
-
-/// JoyTag comes with every vault: what it is, and what it costs.
-struct JoyTagRow: View {
-    @EnvironmentObject var model: InstallerModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            FactRow(fact: .init(kind: .fine, text: "Includes JoyTag, which tags your photos automatically (\(InstallerModel.bytes(model.joyTagBytes)))."))
-            if !model.joyTagRunsHere {
-                Note(text: "Tagging needs macOS 15 or later. Until the vault is opened on a newer Mac, PhotoVault works without it.")
-                    .padding(.leading, 24)
-            }
-        }
-        .padding(.top, 6)
     }
 }
 

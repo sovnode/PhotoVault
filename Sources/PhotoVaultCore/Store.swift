@@ -344,8 +344,8 @@ public actor Store {
     // MARK: - Reads
 
     public func items(scope: LibraryScope, filter: MediaFilter, sort: PhotoOrder = .date, ascending: Bool = true,
-                      groups: TagGroups = TagGroups(text: "")) throws -> [PhotoItem] {
-        try catalog.items(scope: scope, filter: filter, sort: sort, ascending: ascending, groups: groups)
+                      seed: UInt64 = 0, groups: TagGroups = TagGroups(text: "")) throws -> [PhotoItem] {
+        try catalog.items(scope: scope, filter: filter, sort: sort, ascending: ascending, seed: seed, groups: groups)
     }
 
     /// The vault's sort order: the one chosen, or else the default its photos
@@ -363,17 +363,24 @@ public actor Store {
     /// a smart album's own — the library's until one is chosen for it. Nil for
     /// an album, which keeps its own order.
     public func sortSetting(for scope: LibraryScope) throws -> SortSetting? {
-        guard let key = scope.sortKey else { return nil }
-        let library = SortSetting(order: try sortOrder(), ascending: setting("sort.ascending") != "0")
+        let key = scope.sortKey
+        let library = SortSetting(order: try sortOrder(), ascending: setting("sort.ascending") != "0",
+                                  seed: setting("sort.seed").flatMap(UInt64.init) ?? 0)
         guard key != "sort" else { return library }
-        return SortSetting(order: setting(key + ".order").flatMap(PhotoOrder.init(rawValue:)) ?? library.order,
-                           ascending: setting(key + ".ascending").map { $0 != "0" } ?? library.ascending)
+        // An album starts in Album Order; a smart album from the library's sort.
+        var start = library
+        if case .album = scope { start = SortSetting(order: .added, ascending: true) }
+        let order = setting(key + ".order").flatMap(PhotoOrder.init(rawValue:))
+            .flatMap { PhotoOrder.choices(for: scope).contains($0) ? $0 : nil } ?? start.order
+        return SortSetting(order: order, ascending: setting(key + ".ascending").map { $0 != "0" } ?? start.ascending,
+                           seed: setting(key + ".seed").flatMap(UInt64.init) ?? 0)
     }
 
     public func setSortSetting(_ sort: SortSetting, for scope: LibraryScope) {
-        guard let key = scope.sortKey else { return }
+        let key = scope.sortKey
         setSetting(key + ".order", sort.order.rawValue)
         setSetting(key + ".ascending", sort.ascending ? "1" : "0")
+        setSetting(key + ".seed", String(sort.seed))
     }
 
     /// The folders under `Photos/` that hold photos, with counts.
@@ -421,7 +428,57 @@ public actor Store {
     }
 
     public func renameAlbum(_ id: Int64, to name: String) throws { try catalog.renameAlbum(id: id, to: name) }
-    public func deleteAlbum(_ id: Int64) throws { try catalog.deleteAlbum(id: id) }
+    public func deleteAlbum(_ id: Int64) throws {
+        try catalog.deleteAlbum(id: id)
+        forgetViewSettings(.album(id))
+    }
+
+    /// A deleted album's sort and place go with it, so a later album with the
+    /// same id starts afresh.
+    private func forgetViewSettings(_ scope: LibraryScope) {
+        for key in [scope.sortKey + ".order", scope.sortKey + ".ascending", scope.sortKey + ".seed"]
+            + MediaFilter.allCases.map(scope.placeKey) {
+            try? catalog.deleteMeta("setting." + key)
+        }
+    }
+
+    /// A copy of an album — its photos in the same order, and its sort — named
+    /// "<name> (copy)" and listed just after it. Returns the copy's id.
+    @discardableResult
+    public func duplicateAlbum(_ id: Int64) throws -> Int64 {
+        let albums = try catalog.albums()
+        guard let original = albums.first(where: { $0.id == id }) else { throw VaultError.sqlite("no album \(id)") }
+        let copy = try catalog.duplicateAlbum(id: id, name: CopyName.of(original.name, among: albums.map(\.name)))
+        copyViewSettings(from: .album(id), to: .album(copy))
+        var order = albums.map(\.id)
+        order.insert(copy, at: (order.firstIndex(of: id) ?? order.count - 1) + 1)
+        try setAlbumOrder(order)
+        return copy
+    }
+
+    /// A copy of a smart album — its rules and its sort — named "<name> (copy)"
+    /// and listed just after it. Returns the copy's id.
+    @discardableResult
+    public func duplicateSmartAlbum(_ id: Int64) throws -> Int64 {
+        let albums = try catalog.smartAlbums()
+        guard let original = albums.first(where: { $0.id == id }) else { throw VaultError.sqlite("no smart album \(id)") }
+        let copy = try catalog.duplicateSmartAlbum(id: id, name: CopyName.of(original.name, among: albums.map(\.name)))
+        copyViewSettings(from: .smart(id), to: .smart(copy))
+        var order = albums.map(\.id)
+        order.insert(copy, at: (order.firstIndex(of: id) ?? order.count - 1) + 1)
+        try setSmartAlbumOrder(order)
+        return copy
+    }
+
+    private func copyViewSettings(from source: LibraryScope, to copy: LibraryScope) {
+        for suffix in [".order", ".ascending", ".seed"] {
+            if let value = setting(source.sortKey + suffix) { setSetting(copy.sortKey + suffix, value) }
+        }
+    }
+
+    /// The order albums are listed in, from the sidebar after a drag.
+    public func setAlbumOrder(_ ids: [Int64]) throws { try catalog.setOrder(table: "album", ids: ids) }
+    public func setSmartAlbumOrder(_ ids: [Int64]) throws { try catalog.setOrder(table: "smart_album", ids: ids) }
     public func addToAlbum(_ albumID: Int64, photoIDs: [Int64]) throws { try catalog.addToAlbum(albumID: albumID, photoIDs: photoIDs) }
     public func removeFromAlbum(_ albumID: Int64, photoIDs: [Int64]) throws { try catalog.removeFromAlbum(albumID: albumID, photoIDs: photoIDs) }
 
@@ -431,8 +488,7 @@ public actor Store {
     }
     public func deleteSmartAlbum(_ id: Int64) throws {
         try catalog.deleteSmartAlbum(id: id)
-        // Its sort goes with it, so a later album with the same id starts afresh.
-        for suffix in ["order", "ascending"] { try? catalog.deleteMeta("setting.sort.smart.\(id).\(suffix)") }
+        forgetViewSettings(.smart(id))
     }
 
     @discardableResult

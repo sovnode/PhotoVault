@@ -29,6 +29,9 @@ final class ZoomableImageNSView: NSView {
     var onStep: ((Int) -> Void)?
     /// When set, right-clicking the photo offers Show in Library.
     var onShowInLibrary: (() -> Void)?
+    /// When set, right-clicking offers Add to Album: nil is New Album….
+    var onAddToAlbum: ((Int64?) -> Void)?
+    var albums: [(id: Int64, name: String)] = []
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -220,15 +223,37 @@ final class ZoomableImageNSView: NSView {
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
-        guard onShowInLibrary != nil else { return nil }
+        guard onShowInLibrary != nil || onAddToAlbum != nil else { return nil }
         let menu = NSMenu()
-        let item = NSMenuItem(title: "Show in Library", action: #selector(showInLibraryChosen), keyEquivalent: "")
-        item.target = self
-        menu.addItem(item)
+        if onAddToAlbum != nil {
+            let add = NSMenuItem(title: "Add to Album", action: nil, keyEquivalent: "")
+            let albumsMenu = NSMenu()
+            let new = NSMenuItem(title: "New Album…", action: #selector(addToAlbumChosen(_:)), keyEquivalent: "")
+            new.target = self
+            albumsMenu.addItem(new)
+            if !albums.isEmpty { albumsMenu.addItem(.separator()) }
+            for album in albums {
+                let item = NSMenuItem(title: album.name, action: #selector(addToAlbumChosen(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = NSNumber(value: album.id)
+                albumsMenu.addItem(item)
+            }
+            add.submenu = albumsMenu
+            menu.addItem(add)
+        }
+        if onShowInLibrary != nil {
+            let item = NSMenuItem(title: "Show in Library", action: #selector(showInLibraryChosen), keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        }
         return menu
     }
 
     @objc private func showInLibraryChosen() { onShowInLibrary?() }
+
+    @objc private func addToAlbumChosen(_ sender: NSMenuItem) {
+        onAddToAlbum?((sender.representedObject as? NSNumber)?.int64Value)
+    }
 
     /// Escape arrives as `cancelOperation:` when this view is first responder.
     override func cancelOperation(_ sender: Any?) { onEscape?() }
@@ -248,6 +273,8 @@ struct ZoomableImage: NSViewRepresentable {
     var onEscape: (() -> Void)?
     var onStep: ((Int) -> Void)?
     var onShowInLibrary: (() -> Void)?
+    var onAddToAlbum: ((Int64?) -> Void)?
+    var albums: [(id: Int64, name: String)] = []
 
     func makeNSView(context: Context) -> ZoomableImageNSView {
         let view = ZoomableImageNSView()
@@ -260,6 +287,8 @@ struct ZoomableImage: NSViewRepresentable {
         view.onEscape = onEscape
         view.onStep = onStep
         view.onShowInLibrary = onShowInLibrary
+        view.onAddToAlbum = onAddToAlbum
+        view.albums = albums
         view.show(image, key: imageKey)
     }
 }
