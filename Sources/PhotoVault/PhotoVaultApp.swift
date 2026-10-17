@@ -27,7 +27,20 @@ struct PhotoVaultApp: App {
                 .frame(minWidth: 900, minHeight: 600)
         }
         .commands {
-            CommandGroup(replacing: .newItem) {}
+            // Every shortcut comes from Shortcut (Shortcuts.swift), which Help ›
+            // Keyboard Shortcuts lists too.
+            CommandGroup(replacing: .newItem) {
+                Button("New Album…") { model.newAlbumSheet = .init(smart: false) }
+                    .shortcut(.newAlbum)
+                Button("New Smart Album…") { model.newAlbumSheet = .init(smart: true) }
+                    .shortcut(.newSmartAlbum)
+                Divider()
+                Button(model.currentAlbumTarget?.kind == .smart ? "Duplicate Smart Album" : "Duplicate Album") { model.duplicateCurrentAlbum() }
+                    .shortcut(.duplicateAlbum)
+                    .disabled(model.currentAlbumTarget == nil || model.viewing != nil)
+                Button(model.currentAlbumTarget?.kind == .smart ? "Rename Smart Album…" : "Rename Album…") { model.renaming = model.currentAlbumTarget }
+                    .disabled(model.currentAlbumTarget == nil || model.viewing != nil)
+            }
             // Replaces the system Edit items rather than adding beside them.
             // Adding a second ⌘A after the built-in Select All did nothing:
             // the menu fires the first match, and the built-in one sends
@@ -43,29 +56,74 @@ struct PhotoVaultApp: App {
                     .keyboardShortcut("v")
                 Divider()
                 Button("Select All") { model.selectAllCommand() }
-                    .keyboardShortcut("a")
+                    .shortcut(.selectAll)
                 Button("Deselect All") { model.clearSelection() }
-                    .keyboardShortcut("a", modifiers: [.command, .shift])
+                    .shortcut(.deselectAll)
             }
             // No Share menu: share extensions run out-of-process and copy their
             // input off the volume. No Print: CUPS spools to /var/spool/cups.
             CommandGroup(replacing: .printItem) {}
             CommandGroup(after: .sidebar) {
+                let library = model.viewing == nil
+                ForEach([(MediaFilter.all, Shortcut.allMedia), (.photos, .photosOnly), (.videos, .videosOnly)], id: \.0) { filter, key in
+                    Toggle(key.title, isOn: Binding(get: { model.filter == filter }, set: { _ in model.filter = filter }))
+                        .shortcut(key)
+                        .disabled(!library)
+                }
+                Divider()
+                Button("Bigger Thumbnails") { model.stepThumbnailSize(bigger: true) }
+                    .shortcut(.biggerThumbnails)
+                    .disabled(!library || model.thumbnailSize >= GridView.sizeRange.upperBound)
+                Button("Smaller Thumbnails") { model.stepThumbnailSize(bigger: false) }
+                    .shortcut(.smallerThumbnails)
+                    .disabled(!library || model.thumbnailSize <= GridView.sizeRange.lowerBound)
                 Toggle("Show Whole Photos", isOn: Binding(get: { model.showWholePhotos },
                                                           set: { _ in model.toggleWholePhotos() }))
+                    .shortcut(.wholePhotos)
+                Divider()
+                if model.sort?.order == .random {
+                    Button("Shuffle Again") { model.sortCommand(ascending: true) }
+                        .shortcut(.sortUp)
+                        .disabled(!library)
+                } else {
+                    let order = model.sort?.order ?? .date
+                    Button(order.directionLabel(ascending: true)) { model.sortCommand(ascending: true) }
+                        .shortcut(.sortUp)
+                        .disabled(!library || model.sort == nil)
+                    Button(order.directionLabel(ascending: false)) { model.sortCommand(ascending: false) }
+                        .shortcut(.sortDown)
+                        .disabled(!library || model.sort == nil)
+                }
+                Divider()
+                // Space only in the library: in the viewer it plays and
+                // pauses a video. A greyed-out item leaves its key to the view.
+                Button(model.autoScrolling ? "Pause Scrolling" : "Scroll Automatically") { model.autoScrollCommand() }
+                    .shortcut(.autoScroll)
+                    .disabled(!library || model.items.isEmpty)
+                Menu("Scrolling Speed") {
+                    ForEach(LibraryModel.scrollSpeeds, id: \.self) { rows in
+                        Toggle(GridView.speedLabel(rows), isOn: Binding(get: { model.scrollSpeed == rows },
+                                                                         set: { _ in model.setScrollSpeed(rows) }))
+                    }
+                }
+                Divider()
             }
             CommandMenu("Image") {
                 // ⌘L / ⌘R as in Preview. These and the rest of this menu act on
                 // the open photo in the viewer, or on the grid selection.
+                Button(model.favoriteCommandTitle) { model.favoriteCommand() }
+                    .shortcut(.favorite)
+                    .disabled(!model.canFavoriteCurrent)
+                Divider()
                 Button("Rotate Left") { model.rotateCommand(clockwise: false) }
-                    .keyboardShortcut("l")
+                    .shortcut(.rotateLeft)
                     .disabled(!model.canRotateCurrent)
                 Button("Rotate Right") { model.rotateCommand(clockwise: true) }
-                    .keyboardShortcut("r")
+                    .shortcut(.rotateRight)
                     .disabled(!model.canRotateCurrent)
                 Divider()
                 Button("Move to Trash") { model.trashCommand() }
-                    .keyboardShortcut(.delete, modifiers: .command)
+                    .shortcut(.trash)
                     .disabled(!model.canTrashCurrent)
                 Divider()
                 // The classifiers listed are the ones installed in the
@@ -77,6 +135,8 @@ struct PhotoVaultApp: App {
                     }
                     Button("Tag Untagged Photos") { model.tagUntaggedCommand() }
                         .disabled(!model.canTag || model.scanning)
+                    Divider()
+                    Toggle("Show R18 Tags", isOn: Binding(get: { model.showR18 }, set: { model.setShowR18($0) }))
                     if let why = model.taggerUnavailable {
                         Divider()
                         Text(why)
@@ -84,34 +144,42 @@ struct PhotoVaultApp: App {
                 }
                 Divider()
                 // Menu-level shortcuts fire whichever view has keyboard focus.
+                let viewing = model.viewing != nil
                 Button("Previous Photo") { model.step(-1) }
-                    .keyboardShortcut(.leftArrow, modifiers: [])
-                    .disabled(model.viewing == nil)
+                    .shortcut(.previous)
+                    .disabled(!viewing)
                 Button("Next Photo") { model.step(1) }
-                    .keyboardShortcut(.rightArrow, modifiers: [])
-                    .disabled(model.viewing == nil)
+                    .shortcut(.next)
+                    .disabled(!viewing)
                 Button(model.showProperties ? "Hide Properties" : "Show Properties") {
                     model.toggleProperties()
                 }
-                .keyboardShortcut("i")
-                .disabled(model.viewing == nil)
+                .shortcut(.properties)
+                .disabled(!viewing)
                 Button("Show in Library") {
                     if let target = model.showInLibraryTarget { model.showInLibrary(target) }
                 }
                 .disabled(model.showInLibraryTarget == nil)
                 Button("Back to Library") { model.viewing = nil }
-                    .keyboardShortcut(.escape, modifiers: [])
-                    .disabled(model.viewing == nil)
+                    .shortcut(.back)
+                    .disabled(!viewing)
+                Divider()
+                Toggle("Repeat", isOn: Binding(get: { model.repeatOn }, set: { _ in model.playbackCommand(\.repeatOn, key: "r") }))
+                    .shortcut(.repeatToggle)
+                    .disabled(!viewing)
+                Toggle("Play Next", isOn: Binding(get: { model.nextOn }, set: { _ in model.playbackCommand(\.nextOn, key: "n") }))
+                    .shortcut(.playNextToggle)
+                    .disabled(!viewing)
             }
             CommandMenu("Vault") {
                 Button("Rescan Changed Folders") { model.rescan(full: false) }
-                    .keyboardShortcut("r", modifiers: [.command, .option])
+                    .shortcut(.rescan)
                     .disabled(model.scanning)
                 Button("Full Rescan") { model.rescan(full: true) }
-                    .keyboardShortcut("r", modifiers: [.command, .option, .shift])
+                    .shortcut(.fullRescan)
                     .disabled(model.scanning)
                 Button(model.job == .scan ? "Stop Scan" : "Stop Tagging") { model.stopScan() }
-                    .keyboardShortcut(".")
+                    .shortcut(.stop)
                     .disabled(!model.scanning)
                 Divider()
                 Button("Empty Trash…") { model.confirmingEmptyTrash = true }
@@ -120,7 +188,11 @@ struct PhotoVaultApp: App {
                 Button("Export Albums & Favorites…") { Task { await model.exportMemberships() } }
                 Divider()
                 Button("Eject Volume") { delegate.ejectVolume() }
-                    .keyboardShortcut("e")
+                    .shortcut(.eject)
+            }
+            CommandGroup(replacing: .help) {
+                Button("Keyboard Shortcuts") { model.showingShortcuts = true }
+                    .keyboardShortcut("?", modifiers: .command)
             }
         }
     }
@@ -163,6 +235,7 @@ struct RootView: View {
         }
         .background(WindowChrome(viewing: model.viewing != nil, savedFrame: model.savedWindowFrame))
         .sheet(item: $model.newAlbumRequest) { request in NewAlbumForPhotosSheet(request: request) }
+        .sheet(isPresented: $model.showingShortcuts) { ShortcutsSheet() }
         .alert("PhotoVault", isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.errorMessage = nil } }

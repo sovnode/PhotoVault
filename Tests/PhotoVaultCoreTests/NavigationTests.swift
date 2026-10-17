@@ -630,3 +630,19 @@ struct DuplicateAlbumTests {
         await store.close()
     }
 }
+
+@Suite("The view PhotoVault was left on")
+struct ResumeViewTests {
+    @Test func everyViewReadsBackAsItself() {
+        let views: [LibraryScope] = [.all, .favorites, .trash, .album(12), .smart(3), .folder("Photos/2019/a: b")]
+        for view in views {
+            #expect(LibraryScope(storageValue: view.storageValue) == view)
+        }
+    }
+
+    @Test func nonsenseOpensNothing() {
+        for text in ["", "album:", "album:x", "smart:", "folder:", "photos", "album"] {
+            #expect(LibraryScope(storageValue: text) == nil, "\(text)")
+        }
+    }
+}

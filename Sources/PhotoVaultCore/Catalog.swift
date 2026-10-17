@@ -621,14 +621,24 @@ public final class Catalog {
         try step(stmt)
     }
 
-    public func missingPhotosByContentKey() throws -> [String: Int64] {
-        let stmt = try prepare("SELECT content_key, id FROM photo WHERE missing = 1 AND content_key IS NOT NULL;")
+    /// Each missing row with a present row of the same content — a photo
+    /// that has moved — where the present row carries nothing of a person's
+    /// own: no favorite, no album, not in the Trash. The newest such row first
+    /// for each missing one: the copy a scan has just made.
+    public func relinkCandidates() throws -> [(missingID: Int64, presentID: Int64, relPath: String)] {
+        let stmt = try prepare("""
+            SELECT m.id, p.id, p.rel_path FROM photo m
+            JOIN photo p ON p.content_key = m.content_key AND p.missing = 0 AND p.id != m.id
+            WHERE m.missing = 1 AND m.content_key IS NOT NULL
+              AND p.favorite = 0 AND p.trashed = 0
+              AND NOT EXISTS (SELECT 1 FROM album_photo a WHERE a.photo_id = p.id)
+            ORDER BY m.id, p.id DESC;
+            """)
         defer { sqlite3_finalize(stmt) }
-        var out: [String: Int64] = [:]
+        var out: [(missingID: Int64, presentID: Int64, relPath: String)] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
-            if let c = sqlite3_column_text(stmt, 0) {
-                out[String(cString: c)] = sqlite3_column_int64(stmt, 1)
-            }
+            guard let path = sqlite3_column_text(stmt, 2) else { continue }
+            out.append((sqlite3_column_int64(stmt, 0), sqlite3_column_int64(stmt, 1), String(cString: path)))
         }
         return out
     }

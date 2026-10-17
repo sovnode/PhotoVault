@@ -52,7 +52,7 @@ struct TagFilterPanel: View {
                 // on the right, so the tag list never moves under the pointer.
                 // The search box stays put above the list it searches.
                 VStack(alignment: .leading, spacing: 8) {
-                    TagSearchField(count: model.tagCounts.count, query: $query)
+                    TagSearchField(count: model.offeredTagCount, query: $query)
                         .id(album.id)
                     ScrollView { browser.padding(.trailing, 8) }
                 }

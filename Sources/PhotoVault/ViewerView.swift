@@ -183,8 +183,8 @@ struct ViewerView: View {
             playback.onEnded = { videoEnded() }
             load()
         }
-        // A slideshow: each photo stays for the chosen time, then the next or a
-        // random item. Restarts whenever the photo changes — including a step
+        // A slideshow: each photo stays for the chosen time, then the next
+        // item. Restarts whenever the photo changes — including a step
         // by hand — or the setting does; a video moves on when it ends instead.
         .task(id: "\(item.id) \(model.slideshowOn) \(model.slideInterval)") {
             guard model.slideshowOn, item.mediaType == .photo || !item.playable else { return }
@@ -220,11 +220,11 @@ struct ViewerView: View {
             Button { model.viewing = nil } label: {
                 Label("Library", systemImage: "chevron.backward")
             }
-            .help("Back to Library (Esc)")
+            .help("Back to Library (Esc or ⇧)")
             Button { model.step(-1) } label: { Image(systemName: "chevron.left") }
-                .help("Previous (←)")
+                .help(Shortcut.previous.help("Previous"))
             Button { model.step(1) } label: { Image(systemName: "chevron.right") }
-                .help("Next (→)")
+                .help(Shortcut.next.help("Next"))
             Text(item.displayName).lineLimit(1)
             Spacer()
             playbackControls
@@ -233,11 +233,11 @@ struct ViewerView: View {
                 Button { Task { await model.rotateViewing(clockwise: false) } } label: {
                     Image(systemName: "rotate.left")
                 }
-                .help("Rotate Left (⌘L)")
+                .help(Shortcut.rotateLeft.help("Rotate Left"))
                 Button { Task { await model.rotateViewing(clockwise: true) } } label: {
                     Image(systemName: "rotate.right")
                 }
-                .help("Rotate Right (⌘R)")
+                .help(Shortcut.rotateRight.help("Rotate Right"))
             }
             .disabled(!Rotation.canRotate(live) || live.trashed)
             if live.trashed {
@@ -249,7 +249,7 @@ struct ViewerView: View {
                 Button { Task { await model.trashViewing() } } label: {
                     Image(systemName: "trash")
                 }
-                .help("Move to Trash (⌘⌫)")
+                .help(Shortcut.trash.help("Move to Trash"))
             }
             Button {
                 Task { await model.toggleFavoriteForViewing() }
@@ -259,12 +259,13 @@ struct ViewerView: View {
                 Image(systemName: live.favorite ? "heart.fill" : "heart")
                     .foregroundStyle(live.favorite ? .red : .white)
             }
-            .keyboardShortcut(".", modifiers: [])
-            .help("Favorite (.)")
+            // The key is the Image menu's Add to Favorites, which acts on the
+            // photo on screen here.
+            .help(Shortcut.favorite.help(live.favorite ? "Remove from Favorites" : "Add to Favorites"))
             Button { model.toggleProperties() } label: {
                 Image(systemName: model.showProperties ? "info.circle.fill" : "info.circle")
             }
-            .help(model.showProperties ? "Hide Properties (⌘I)" : "Show Properties (⌘I)")
+            .help(Shortcut.properties.help(model.showProperties ? "Hide Properties" : "Show Properties"))
         }
         .buttonStyle(.borderless)
         .font(.title3)
@@ -273,13 +274,12 @@ struct ViewerView: View {
         .background(.black.opacity(0.35))
     }
 
-    /// Repeat, Random and Play Next, and — while a slideshow can run — how
+    /// Repeat and Play Next, and — while a slideshow can run — how
     /// long each photo stays.
     private var playbackControls: some View {
         HStack(spacing: 12) {
-            toggle(\.repeatOn, symbol: "repeat", help: "Repeat: loop the video; start a slideshow again at the end")
-            toggle(\.randomOn, symbol: "shuffle", help: "Random: move on to a random item when a video ends, or after a photo's time")
-            toggle(\.nextOn, symbol: "forward.end", help: "Play Next: move on to the next item when a video ends, or after a photo's time")
+            toggle(\.repeatOn, symbol: "repeat", key: .repeatToggle, help: "Repeat: loop the video; start a slideshow again at the end")
+            toggle(\.nextOn, symbol: "forward.end", key: .playNextToggle, help: "Play Next: move on to the next item when a video ends, or after a photo's time")
             if model.slideshowOn {
                 // A plain button-style menu draws its label as given — white,
                 // like the icons beside it. The borderless menu style drew it in
@@ -306,7 +306,7 @@ struct ViewerView: View {
         }
     }
 
-    private func toggle(_ flag: ReferenceWritableKeyPath<LibraryModel, Bool>, symbol: String, help: String) -> some View {
+    private func toggle(_ flag: ReferenceWritableKeyPath<LibraryModel, Bool>, symbol: String, key: Shortcut, help: String) -> some View {
         let on = model[keyPath: flag]
         return Button { model[keyPath: flag].toggle() } label: {
             Image(systemName: symbol)
@@ -314,7 +314,7 @@ struct ViewerView: View {
                 .padding(3)
                 .background(on ? Color.white.opacity(0.25) : .clear, in: RoundedRectangle(cornerRadius: 5))
         }
-        .help(help + (on ? " (on)" : " (off)"))
+        .help("\(help) — \(on ? "on" : "off") (\(key.label))")
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 

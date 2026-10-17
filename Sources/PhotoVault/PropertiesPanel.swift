@@ -93,7 +93,7 @@ struct PropertiesPanel: View {
     /// albums.
     @ViewBuilder
     private var tagsSection: some View {
-        if tags.isEmpty {
+        if visibleTags.isEmpty {
             note("No tags.")
         }
         ForEach(sources, id: \.self) { source in
@@ -103,7 +103,7 @@ struct PropertiesPanel: View {
                     note(describe(record))
                 }
                 FlowLayout(spacing: 4) {
-                    ForEach(tags.filter { $0.source == source }, id: \.key) { tag in
+                    ForEach(visibleTags.filter { $0.source == source }, id: \.key) { tag in
                         Text(TagKey.display(tag.name))
                             .font(.caption)
                             .padding(.horizontal, 6)
@@ -115,9 +115,13 @@ struct PropertiesPanel: View {
         }
     }
 
+    /// The tags shown: R18 ones are left out unless Show R18 Tags is on —
+    /// with no note that any were, which would itself say what's in the photo.
+    private var visibleTags: [PhotoTag] { tags.filter { !model.isHiddenTag($0.key) } }
+
     /// JoyTag first, then other tools, then the photo's own keywords.
     private var sources: [String] {
-        let present = Set(tags.map(\.source))
+        let present = Set(visibleTags.map(\.source))
         let others = present.subtracting([JoyTag.prefix, FileTag.manual]).sorted()
         return ([JoyTag.prefix] + others + [FileTag.manual]).filter(present.contains)
     }

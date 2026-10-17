@@ -12,7 +12,8 @@ window state in your home folder, and it never connects to the internet.
 
 - **Browse** every photo and video in the vault, or folder by folder, sorted
   by date taken, date created, file name, video length or at random, either
-  way round. Every view opens where you left it.
+  way round. Every view opens where you left it, and PhotoVault opens on the
+  view you were last in. The grid can scroll by itself at a speed you choose.
 - **Albums, favorites and smart albums.** Smart albums pick their photos from
   tag rules: include or exclude tags, match any or all. Drag albums into the
   order you want, duplicate them, and sort each one its own way.
@@ -23,8 +24,10 @@ window state in your home folder, and it never connects to the internet.
   editable text file in the vault (`.Tag Groups.txt`).
 - **A viewer** with zoom for photos and videos, the photo's details (file,
   dates, dimensions, the keywords already in it, its tags) and video playback
-  — with Repeat, Random and Play Next, slideshows, and one playback speed for
+  — with Repeat and Play Next, slideshows, and one playback speed for
   every video.
+- **Keyboard shortcuts** for nearly everything, shown beside each command and
+  listed in Help › Keyboard Shortcuts.
 - **Rotate JPEGs** without re-encoding: only the orientation value changes, so
   every other byte, and the photo's dates, stay as they were.
 - **Trash** with Put Back. Files leave the disk only when you empty it.

@@ -74,8 +74,10 @@ idle_cpu_percent() {
 SCREEN="${PHOTOVAULT_SMOKE_SCREEN:+PHOTOVAULT_SMOKE_SCREEN=$PHOTOVAULT_SMOKE_SCREEN}"
 
 launch() {  # launch [ENV=VALUE ...]
+    # Each launch starts in All Media, whatever the last one left open — the
+    # hooks expect it. The last stage checks opening where it was left.
     # shellcheck disable=SC2086  # $SCREEN is empty or one VAR=value
-    env $SCREEN "$@" "$MOUNT/PhotoVault.app/Contents/MacOS/PhotoVault" >>"$WORK/app.log" 2>&1 &
+    env $SCREEN PHOTOVAULT_SMOKE_NO_RESUME=1 "$@" "$MOUNT/PhotoVault.app/Contents/MacOS/PhotoVault" >>"$WORK/app.log" 2>&1 &
     PID=$!
 }
 
@@ -464,6 +466,60 @@ expect "the video speed is kept in the vault's catalog" "$(sql "SELECT value FRO
 expect "the slideshow time is kept in the vault's catalog" "$(sql "SELECT value FROM meta WHERE key = 'setting.viewer.interval';")" "2.0"
 if stop_app; then pass "quit promptly"; else fail "quit promptly"; fi
 expect "All Media's place is kept in the vault's catalog" "$(sql "SELECT COUNT(*) FROM meta WHERE key = 'setting.place.all';")" "1"
+
+# ------------------------------------------------------------------ keyboard shortcuts
+
+echo "Keyboard shortcuts, pressed as key events sent to the app; scrolling by itself"
+MARK=$(wc -l < "$WORK/app.log" | tr -d ' ')
+launch PHOTOVAULT_SMOKE_KEYS=1
+t=0
+while ! tail -n +$((MARK + 1)) "$WORK/app.log" | grep -q "smoke: key the photo is as it was"; do
+    [ "$t" -ge 120 ] && break
+    sleep 1; t=$((t + 1))
+done
+KEYS="$(tail -n +$((MARK + 1)) "$WORK/app.log" | sed -n 's/^smoke: key //p')"
+if [ -z "$KEYS" ]; then
+    fail "the shortcuts were pressed (no report)"
+else
+    # Fed from a here-document, not a pipe: a piped loop runs in a subshell,
+    # and its passes and failures wouldn't be counted.
+    while IFS= read -r line; do
+        case "$line" in
+            *": yes") pass "${line%: yes}" ;;
+            *) fail "$line" ;;
+        esac
+    done <<KEYS
+$KEYS
+KEYS
+fi
+if stop_app; then pass "quit promptly"; else fail "quit promptly"; fi
+
+# ------------------------------------------------------------------ opening where it was left
+
+echo "Opening where it was left: a folder, only photos, a photo open"
+MARK=$(wc -l < "$WORK/app.log" | tr -d ' ')
+launch PHOTOVAULT_SMOKE_LEAVE=1
+t=0
+while ! tail -n +$((MARK + 1)) "$WORK/app.log" | grep -q "smoke: left "; do
+    [ "$t" -ge 60 ] && break
+    sleep 1; t=$((t + 1))
+done
+LEFT="$(tail -n +$((MARK + 1)) "$WORK/app.log" | sed -n 's/^smoke: left at //p' | head -1)"
+if stop_app; then pass "quit promptly"; else fail "quit promptly"; fi
+MARK=$(wc -l < "$WORK/app.log" | tr -d ' ')
+launch PHOTOVAULT_SMOKE_NO_RESUME=0 PHOTOVAULT_SMOKE_RESUME=1
+t=0
+while ! tail -n +$((MARK + 1)) "$WORK/app.log" | grep -q "smoke: opened at "; do
+    [ "$t" -ge 60 ] && break
+    sleep 1; t=$((t + 1))
+done
+OPENED="$(tail -n +$((MARK + 1)) "$WORK/app.log" | sed -n 's/^smoke: opened at //p' | head -1)"
+if [ -n "$LEFT" ] && [ "$OPENED" = "$LEFT" ]; then
+    pass "PhotoVault opens where it was left ($OPENED)"
+else
+    fail "PhotoVault opens where it was left (left '$LEFT', opened '$OPENED')"
+fi
+if stop_app; then pass "quit promptly"; else fail "quit promptly"; fi
 
 # ------------------------------------------------------------------ eject
 

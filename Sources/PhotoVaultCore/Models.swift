@@ -431,6 +431,36 @@ public enum LibraryScope: Hashable, Sendable {
         }
     }
 
+    /// The view as text, to be kept in the catalog: "all", "album:12",
+    /// "folder:Photos/2019" — so PhotoVault opens again where it was left.
+    public var storageValue: String {
+        switch self {
+        case .all: return "all"
+        case .favorites: return "favorites"
+        case .trash: return "trash"
+        case .album(let id): return "album:\(id)"
+        case .smart(let id): return "smart:\(id)"
+        case .folder(let path): return "folder:\(path)"
+        }
+    }
+
+    public init?(storageValue: String) {
+        switch storageValue {
+        case "all": self = .all
+        case "favorites": self = .favorites
+        case "trash": self = .trash
+        default:
+            guard let colon = storageValue.firstIndex(of: ":") else { return nil }
+            let kind = storageValue[..<colon], rest = String(storageValue[storageValue.index(after: colon)...])
+            switch kind {
+            case "album": guard let id = Int64(rest) else { return nil }; self = .album(id)
+            case "smart": guard let id = Int64(rest) else { return nil }; self = .smart(id)
+            case "folder": guard !rest.isEmpty else { return nil }; self = .folder(rest)
+            default: return nil
+            }
+        }
+    }
+
     public var placeKey: String {
         switch self {
         case .all: return "place.all"

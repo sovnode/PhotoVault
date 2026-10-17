@@ -203,14 +203,31 @@ public actor Store {
             }
 
             // On an incremental pass, a path can only be declared missing if the
-            // directory holding it was actually walked. Anything else was simply
-            // not looked at this time.
-            let gone: [Int64] = existing.compactMap { relPath, file in
+            // directory holding it was actually walked — or no longer exists:
+            // renamed, moved or deleted. Anything else was simply not looked at
+            // this time. Before gone folders counted, a renamed folder's photos
+            // were never marked gone, so they couldn't be recognised at their
+            // new paths: each came back as a new photo, thumbnailed and tagged
+            // again, while the old rows lingered with the favorites and albums.
+            // Checking the disk, not just this pass's folders, also clears rows
+            // left like that by a version with that bug.
+            var folderGone: [String: Bool] = [:]
+            func isGone(_ dir: String) -> Bool {
+                if result.dirs[dir] != nil { return false }
+                if let known = folderGone[dir] { return known }
+                let gone = Scanner.directoryMTime(root.appendingPathComponent(dir)) == nil
+                folderGone[dir] = gone
+                return gone
+            }
+            // No Photos folder at all is a vault not properly there, not every
+            // photo deleted: nothing is marked gone.
+            let mediaThere = Scanner.directoryMTime(VolumeLocator.mediaDir(root)) != nil
+            let gone: [Int64] = !mediaThere ? [] : existing.compactMap { relPath, file in
                 let id = file.id
                 if seen.contains(relPath) { return nil }
                 if result.isFull { return id }
                 let dir = (relPath as NSString).deletingLastPathComponent
-                return result.enumeratedDirs.contains(dir) ? id : nil
+                return result.enumeratedDirs.contains(dir) || isGone(dir) ? id : nil
             }
             try catalog.markMissing(ids: gone)
 
@@ -218,27 +235,29 @@ public actor Store {
             try catalog.removeDirStates(result.vanishedDirs)
         }
 
-        try relinkMoved(among: result.files)
+        try relinkMoved()
     }
 
-    /// A row whose path vanished, and a newly-seen file carrying the same
-    /// content key, are the same photo moved. Relinking preserves its album
-    /// memberships and favorite flag instead of orphaning them.
-    func relinkMoved(among files: [ScannedFile]) throws {
-        let missing = try catalog.missingPhotosByContentKey()
-        guard !missing.isEmpty else { return }
-
+    /// A row whose path vanished, and a row for a file carrying the same
+    /// content key, are the same photo moved. The vanished row — which carries
+    /// the favorite, the album memberships, the tags and the thumbnail — takes
+    /// over the new path, and the other row goes. Only a row carrying nothing
+    /// of a person's own (no favorite, no album, not in the Trash) is replaced
+    /// like that, so an identical copy someone has used is left as it is.
+    ///
+    /// From the catalog, not the files of this pass: a duplicate row made by
+    /// an earlier pass — a folder renamed before vanished folders counted —
+    /// sits in a folder this pass may not walk again.
+    func relinkMoved() throws {
+        let pairs = try catalog.relinkCandidates()
+        guard !pairs.isEmpty else { return }
+        var usedMissing = Set<Int64>(), usedPresent = Set<Int64>()
         try catalog.transaction {
-            for f in files {
-                guard let key = ContentKey.compute(url: root.appendingPathComponent(f.relPath), fileSize: f.size),
-                      let missingID = missing[key],
-                      let currentID = try catalog.photoID(relPath: f.relPath),
-                      currentID != missingID
-                else { continue }
-                // The fresh row for the new path is the duplicate; drop it and
-                // move the original — which carries the album rows — onto the path.
-                try catalog.exec("DELETE FROM photo WHERE id = \(currentID);")
-                try catalog.relink(missingID: missingID, toRelPath: f.relPath)
+            for pair in pairs where !usedMissing.contains(pair.missingID) && !usedPresent.contains(pair.presentID) {
+                usedMissing.insert(pair.missingID)
+                usedPresent.insert(pair.presentID)
+                try catalog.exec("DELETE FROM photo WHERE id = \(pair.presentID);")
+                try catalog.relink(missingID: pair.missingID, toRelPath: pair.relPath)
             }
         }
     }

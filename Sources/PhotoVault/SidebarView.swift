@@ -90,8 +90,6 @@ struct SidebarView: View {
     static let smartDrag = "photovault-smart-album"
 
     @EnvironmentObject var model: LibraryModel
-    @State private var showingNewAlbum = false
-    @State private var renaming: RenameTarget?
     /// The row an album being dragged would land beside, and on which side.
     @State private var dropTarget: DropTarget?
     /// The rows picked: one, or several with ⌘- or ⇧-click — albums and smart
@@ -198,18 +196,25 @@ struct SidebarView: View {
         .id([model.albums.isEmpty, model.smartAlbums.isEmpty])
         .safeAreaInset(edge: .bottom) {
             Button {
-                showingNewAlbum = true
+                model.newAlbumSheet = .init(smart: false)
             } label: {
                 Label("New Album", systemImage: "plus")
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
             .padding(10)
+            .help(Shortcut.newAlbum.help("New Album"))
+        }
+        // Return renames the album or smart album picked, as in Finder.
+        .onKeyPress(.return) {
+            guard selected.count == 1, let target = model.currentAlbumTarget, selected.first == model.scope else { return .ignored }
+            model.renaming = target
+            return .handled
         }
         // A sheet rather than an alert: an alert can't hold the Smart album
         // checkbox.
-        .sheet(isPresented: $showingNewAlbum) { NewAlbumSheet() }
-        .sheet(item: $renaming) { target in RenameSheet(target: target) }
+        .sheet(item: $model.newAlbumSheet) { kind in NewAlbumSheet(smart: kind.smart) }
+        .sheet(item: $model.renaming) { target in RenameSheet(target: target) }
     }
 
     @ViewBuilder
@@ -223,8 +228,9 @@ struct SidebarView: View {
                     .disabled(model.trashCount == 0)
             case .album(let id):
                 if let album = model.albums.first(where: { $0.id == id }) {
-                    Button("Rename…") { renaming = RenameTarget(kind: .album, id: id, name: album.name) }
+                    Button("Rename…") { model.renaming = RenameTarget(kind: .album, id: id, name: album.name) }
                     Button("Duplicate Album") { Task { await model.duplicateAlbum(id) } }
+                        .shortcut(.duplicateAlbum)
                     Divider()
                     Button("Delete Album") { afterMenuCloses { await model.deleteAlbum(id) } }
                 }
@@ -236,8 +242,9 @@ struct SidebarView: View {
                             model.editingFilter = true
                         }
                     }
-                    Button("Rename…") { renaming = RenameTarget(kind: .smart, id: id, name: sa.name) }
+                    Button("Rename…") { model.renaming = RenameTarget(kind: .smart, id: id, name: sa.name) }
                     Button("Duplicate Smart Album") { Task { await model.duplicateSmartAlbum(id) } }
+                        .shortcut(.duplicateAlbum)
                     Divider()
                     Button("Delete Smart Album") { afterMenuCloses { await model.deleteSmartAlbum(id) } }
                 }
@@ -290,7 +297,9 @@ private struct NewAlbumSheet: View {
     @EnvironmentObject var model: LibraryModel
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
-    @State private var smart = false
+    @State private var smart: Bool
+
+    init(smart: Bool) { _smart = State(initialValue: smart) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

@@ -60,9 +60,17 @@ final class LibraryModel: ObservableObject {
             // that scrolling waits for.
             savePlace(oldValue.placeKey(filter))
             restoringPlace = true
+            autoScrolling = false
             clearSelection()
             if case .smart = scope {} else { editingFilter = false }
-            Task { await reload() }
+            // Opening where it was left: start() reloads once it has it all.
+            guard !resuming else { return }
+            rememberView()
+            let scope = self.scope
+            Task {
+                await applyViewFilter(of: scope)
+                await reload()
+            }
         }
     }
     /// All, Photos or Videos. Each keeps its own place in every view, so
@@ -71,7 +79,11 @@ final class LibraryModel: ObservableObject {
         didSet {
             savePlace(scope.placeKey(oldValue))
             restoringPlace = true
+            autoScrolling = false
             clearSelection()
+            guard !resuming else { return }
+            rememberView()
+            rememberFilter()
             Task { await reload() }
         }
     }
@@ -84,32 +96,33 @@ final class LibraryModel: ObservableObject {
             // the next time a photo is opened.
             if viewing == nil {
                 if nextOn { nextOn = false }
-                if randomOn { randomOn = false }
+            } else if autoScrolling {
+                // Opening a photo pauses scrolling the grid.
+                autoScrolling = false
             }
+            if viewing?.id != oldValue?.id { rememberView() }
             updateSlideshowAssertion()
         }
     }
 
-    // MARK: - Repeat, Random, Play Next
+    // MARK: - Repeat and Play Next
 
     /// Loops the video on screen; a slideshow that reaches the end starts again.
     @Published var repeatOn = false
-    /// Moves on to a random item when a video ends, or after a photo's time.
-    @Published var randomOn = false { didSet { if randomOn { shuffleQueue = [] }; updateSlideshowAssertion() } }
     /// Moves on to the next item when a video ends, or after a photo's time.
+    /// No Random beside it: the Random sort order shows a view in a random
+    /// order, which Play Next then follows.
     @Published var nextOn = false { didSet { updateSlideshowAssertion() } }
     /// Seconds each photo stays in a slideshow. Saved per vault.
     @Published private(set) var slideInterval: Double = 5
     static let slideIntervals: [Double] = [2, 3, 5, 10, 20, 30]
     /// One playback speed for every video. Saved per vault.
     private(set) var videoSpeed: Float = 1
-    /// Items Random hasn't shown yet, in the order it will show them.
-    private var shuffleQueue: [Int64] = []
     private var displayAwake: IOPMAssertionID = 0
-    /// How many times Play Next or Random has moved on. For the smoke test.
+    /// How many times Play Next has moved on. For the smoke test.
     private var smokeMoves = 0
 
-    var slideshowOn: Bool { nextOn || randomOn }
+    var slideshowOn: Bool { nextOn }
 
     func setSlideInterval(_ seconds: Double) {
         slideInterval = seconds
@@ -122,19 +135,11 @@ final class LibraryModel: ObservableObject {
         Task { await store?.setSetting("video.speed", String(speed)) }
     }
 
-    /// Play Next and Random: the item after the one open, or a random one not
-    /// shown yet. Random reshuffles once every item has been shown; Play Next
-    /// stops at the end unless Repeat is on. Returns whether it moved.
+    /// Play Next: the item after the one open, in the view's order. It stops
+    /// at the end unless Repeat is on. Returns whether it moved.
     @discardableResult
     func advance() -> Bool {
         guard let open = viewing, !items.isEmpty else { return false }
-        if randomOn {
-            if shuffleQueue.isEmpty { shuffleQueue = items.map(\.id).filter { $0 != open.id }.shuffled() }
-            while let id = shuffleQueue.popLast() {
-                if let next = items.first(where: { $0.id == id }) { return show(next) }
-            }
-            return false
-        }
         guard let i = items.firstIndex(where: { $0.id == open.id }) else { return false }
         if i + 1 < items.count { return show(items[i + 1]) }
         if repeatOn, let first = items.first, first.id != open.id { return show(first) }
@@ -142,6 +147,7 @@ final class LibraryModel: ObservableObject {
     }
 
     private func show(_ item: PhotoItem) -> Bool {
+        SmokeHooks.say("moved on by itself to \(item.id)")
         smokeMoves += 1
         lastStep = 1
         viewing = item
@@ -149,10 +155,10 @@ final class LibraryModel: ObservableObject {
         return true
     }
 
-    /// The display stays awake while a slideshow runs — a power assertion,
-    /// which writes nothing to disk.
+    /// The display stays awake while a slideshow runs or the grid scrolls by
+    /// itself — a power assertion, which writes nothing to disk.
     private func updateSlideshowAssertion() {
-        let wanted = slideshowOn && viewing != nil
+        let wanted = viewing != nil ? slideshowOn : autoScrolling
         if wanted, displayAwake == 0 {
             IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
                                         IOPMAssertionLevel(kIOPMAssertionLevelOn),
@@ -343,14 +349,262 @@ final class LibraryModel: ObservableObject {
             showWholePhotos = await store.setting("grid.whole") == "1"
             if let seconds = await store.setting("viewer.interval").flatMap(Double.init), seconds > 0 { slideInterval = seconds }
             if let speed = await store.setting("video.speed").flatMap(Float.init), speed > 0 { videoSpeed = speed }
+            if let rows = await store.setting("grid.scrollSpeed").flatMap(Double.init), rows > 0 { scrollSpeed = rows }
+            installKeyMonitor()
             locateTagger(root: root)
             await reloadTags()
-            await reload()
+            await resumeWhereLeft(store)
             runScan(full: nil)
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             status = "Not ready"
         }
+    }
+
+    // MARK: - Opening where it was left
+
+    /// Set while the view PhotoVault was left on is put back, so the scope and
+    /// filter being set don't each reload, or save themselves again.
+    private var resuming = false
+    private var viewSave: Task<Void, Never>?
+
+    /// The view on screen — album, folder, filter, the photo open in the
+    /// viewer — kept in the catalog as it changes, so PhotoVault opens there
+    /// next time. Each view's scroll position is kept already (its place).
+    private func rememberView() {
+        guard let store, !resuming else { return }
+        let view = scope.storageValue, filter = String(self.filter.rawValue)
+        let open = viewing.map { String($0.id) } ?? ""
+        let previous = viewSave
+        viewSave = Task {
+            await previous?.value
+            await store.setSetting("last.view", view)
+            await store.setSetting("last.filter", filter)
+            await store.setSetting("last.viewing", open)
+        }
+    }
+
+    /// All, Photos or Videos, as each view was last left: the filter is the
+    /// view's own, not one for every view.
+    private var viewFilters: [String: MediaFilter] = [:]
+    /// A photo Show in Library is about to reveal: All Media's filter mustn't
+    /// hide it.
+    private var revealing: MediaType?
+
+    private static func filterKey(_ scope: LibraryScope) -> String { "filter.\(scope.storageValue)" }
+
+    private func rememberFilter() {
+        let key = Self.filterKey(scope), filter = self.filter
+        viewFilters[key] = filter
+        Task { await store?.setSetting(key, String(filter.rawValue)) }
+    }
+
+    /// Puts back the filter `scope` was left with, quietly — the reload
+    /// that follows shows it.
+    private func applyViewFilter(of scope: LibraryScope, fallback: MediaFilter = .all) async {
+        guard let store else { return }
+        let key = Self.filterKey(scope)
+        var saved: MediaFilter
+        if let known = viewFilters[key] {
+            saved = known
+        } else {
+            saved = await store.setting(key).flatMap(Int.init).flatMap(MediaFilter.init(rawValue:)) ?? fallback
+            viewFilters[key] = saved
+        }
+        guard self.scope == scope else { return }
+        if let kind = revealing {
+            revealing = nil
+            if (saved == .photos && kind == .video) || (saved == .videos && kind == .photo) {
+                saved = .all
+                rememberFilterQuietly(saved, for: key)
+            }
+        }
+        guard saved != filter else { return }
+        resuming = true
+        filter = saved
+        resuming = false
+    }
+
+    private func rememberFilterQuietly(_ filter: MediaFilter, for key: String) {
+        viewFilters[key] = filter
+        Task { await store?.setSetting(key, String(filter.rawValue)) }
+    }
+
+    /// Opens the view PhotoVault was left on, at its place, with the photo
+    /// that was open opened again. An album deleted since, or a folder gone,
+    /// opens All Media instead.
+    private func resumeWhereLeft(_ store: Store) async {
+        var reopen: Int64?
+        if ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_NO_RESUME"] != "1",
+           let saved = await store.setting("last.view").flatMap(LibraryScope.init(storageValue:)) {
+            resuming = true
+            scope = saved
+            resuming = false
+            // The view's own filter; a catalog from before views had their
+            // own keeps the one it was left with.
+            let left = await store.setting("last.filter").flatMap(Int.init).flatMap(MediaFilter.init(rawValue:)) ?? .all
+            await applyViewFilter(of: saved, fallback: left)
+            reopen = await store.setting("last.viewing").flatMap(Int64.init)
+        }
+        await reload()
+        if !viewExists(scope) {
+            scope = .all
+            return
+        }
+        if let id = reopen, let item = items.first(where: { $0.id == id }) {
+            select(only: id)
+            viewing = item
+        }
+        if ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_RESUME"] == "1" {
+            print("smoke: opened at \(scope.storageValue) filter \(filter.rawValue) viewing \(viewing.map { String($0.id) } ?? "none")")
+            fflush(stdout)
+        }
+    }
+
+    private func viewExists(_ scope: LibraryScope) -> Bool {
+        func has(_ path: String, in node: FolderNode) -> Bool {
+            node.id == path || (node.children ?? []).contains { has(path, in: $0) }
+        }
+        switch scope {
+        case .album(let id): return albums.contains { $0.id == id }
+        case .smart(let id): return smartAlbums.contains { $0.id == id }
+        case .folder(let path): return folderTree.map { has(path, in: $0) } ?? false
+        case .all, .favorites, .trash: return true
+        }
+    }
+
+    // MARK: - Keys the views don't get first
+
+    private var keyMonitor: Any?
+
+    /// Space and the arrow keys, looked at before any view or the menu bar
+    /// sees them. Space as a menu shortcut never arrived while the sidebar had
+    /// the focus; the arrows move the grid's selection, which no view does;
+    /// and in the viewer the arrows step through the view in its order — a
+    /// playing video took them for itself, so with Play Next a video skipped to
+    /// its end and the item after it came next.
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.keyDown, .flagsChanged, .leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel]
+        ) { [weak self] event in
+            MainActor.assumeIsolated {
+                guard let self else { return false }
+                self.trackShift(event)
+                return event.type == .keyDown && self.handleKey(event)
+            } ? nil : event
+        }
+    }
+
+    /// The window a key or Shift press is for, if it's the main window with
+    /// no sheet over it and nothing being typed. (An event made by the smoke
+    /// test may carry no window: the main window is assumed.)
+    private func mainWindow(for event: NSEvent) -> NSWindow? {
+        guard let window = event.window ?? Self.typingWindow, window === Self.typingWindow, !window.isSheet,
+              window.attachedSheet == nil, !isEditingText else { return nil }
+        return window
+    }
+
+    /// Shift pressed and let go on its own — no key, click or scroll while it
+    /// was down, so ⇧-click and ⇧-arrow selecting never count — opens the one
+    /// photo picked, or in the viewer goes back to the library, as Esc does.
+    private var shiftAlone = false
+    private var shiftDownAt: TimeInterval = 0
+
+    private func trackShift(_ event: NSEvent) {
+        guard event.type == .flagsChanged else { shiftAlone = false; return }
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            .subtracting([.capsLock, .numericPad, .function])
+        let isShift = event.keyCode == 56 || event.keyCode == 60
+        if isShift, flags == .shift {
+            shiftAlone = true
+            shiftDownAt = event.timestamp
+        } else if isShift, flags.isEmpty, shiftAlone {
+            shiftAlone = false
+            // A long hold isn't a press: it was meant for something else.
+            guard event.timestamp - shiftDownAt < 0.8, mainWindow(for: event) != nil else { return }
+            shiftPressed()
+        } else {
+            shiftAlone = false
+        }
+    }
+
+    private func shiftPressed() {
+        if viewing != nil {
+            viewing = nil
+        } else if selection.count == 1, let id = selection.first, let item = items.first(where: { $0.id == id }) {
+            viewing = item
+        }
+    }
+
+    /// Whether the key was used here.
+    private func handleKey(_ event: NSEvent) -> Bool {
+        // Only in the main window, not a sheet over it, and not while typing.
+        guard let window = mainWindow(for: event),
+              event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty
+        else { return false }
+        let arrow: GridMove?
+        switch event.keyCode {
+        case 53:
+            // Esc: back to the library — from a playing video too, which
+            // otherwise kept it.
+            guard viewing != nil else { return false }
+            viewing = nil
+            return true
+        case 123: arrow = .left
+        case 124: arrow = .right
+        case 125: arrow = .down
+        case 126: arrow = .up
+        case 49:
+            // Space: in the viewer it's the video's play and pause.
+            guard viewing == nil else { return false }
+            autoScrollCommand()
+            return true
+        default: return false
+        }
+        guard let arrow else { return false }
+        if viewing != nil {
+            switch arrow {
+            case .left: step(-1); return true
+            case .right: step(1); return true
+            case .up, .down: return false
+            }
+        }
+        // The sidebar's own arrows move through its list.
+        if window.firstResponder is NSTableView { return false }
+        return moveSelection(arrow)
+    }
+
+    enum GridMove { case left, right, up, down }
+
+    /// The grid's width, for how many photos a row holds.
+    var gridWidth: CGFloat = 0
+    /// A photo the grid should scroll just far enough to show.
+    @Published private(set) var revealRequest: RevealRequest?
+
+    struct RevealRequest: Equatable {
+        let index: Int
+        let token = UUID()
+    }
+
+    /// The arrow keys with one photo picked in the grid: the photo beside it,
+    /// or the one above or below. Quick for going through photos one by one —
+    /// to rotate them (⌘L, ⌘R), say.
+    func moveSelection(_ move: GridMove) -> Bool {
+        guard selection.count == 1, let id = selection.first,
+              let i = items.firstIndex(where: { $0.id == id }) else { return false }
+        let columns = GridView.columns(width: gridWidth, cellSize: thumbnailSize)
+        let j: Int
+        switch move {
+        case .left: j = i - 1
+        case .right: j = i + 1
+        case .up: j = i - columns
+        case .down: j = i + columns
+        }
+        guard items.indices.contains(j) else { return true }
+        select(only: items[j].id)
+        revealRequest = RevealRequest(index: j)
+        return true
     }
 
     // MARK: - Scanning
@@ -387,6 +641,8 @@ final class LibraryModel: ObservableObject {
                 await self.openFilterForSmokeTest()
                 await self.checkPlacesForSmokeTest()
                 await self.checkPlaybackForSmokeTest()
+                await self.checkKeysForSmokeTest()
+                await self.leaveForSmokeTest()
                 await self.timeSwitchingForSmokeTest()
                 await self.considerTagging()
             }
@@ -592,6 +848,311 @@ final class LibraryModel: ObservableObject {
         fflush(stdout)
     }
 
+    /// Hook for `Scripts/smoke-test.sh`: goes to a folder, shows only photos
+    /// and opens one, then reports where — for the next launch to open there.
+    /// `PHOTOVAULT_SMOKE_LEAVE=1`; inert otherwise.
+    private var smokeLeft = false
+    private func leaveForSmokeTest() async {
+        guard !smokeLeft, ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_LEAVE"] == "1",
+              let folder = folderTree?.children?.first(where: { $0.directCount > 1 })?.id else { return }
+        smokeLeft = true
+        func wait(_ seconds: Double) async { try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000)) }
+        scope = .folder(folder)
+        await wait(1.5)
+        filter = .photos
+        await wait(1.5)
+        guard items.count > 1 else { return print("smoke: left nowhere: too few photos") }
+        select(only: items[1].id)
+        viewing = items[1]
+        await wait(1.5)
+        print("smoke: left at \(scope.storageValue) filter \(filter.rawValue) viewing \(items[1].id)")
+        fflush(stdout)
+    }
+
+    /// Hook for `Scripts/smoke-test.sh`: presses the keyboard shortcuts as
+    /// key events sent to the app itself — through the menus, as typing them
+    /// would, without the Accessibility permission synthetic input needs — and
+    /// reports what each did. `PHOTOVAULT_SMOKE_KEYS=1`; inert otherwise.
+    private var smokeKeysChecked = false
+    private func checkKeysForSmokeTest() async {
+        guard !smokeKeysChecked, ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_KEYS"] == "1",
+              scope == .all, viewing == nil, let photo = items.first(where: { $0.mediaType == .photo }) else { return }
+        smokeKeysChecked = true
+        func wait(_ seconds: Double = 0.6) async { try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000)) }
+        func press(_ chars: String, _ code: UInt16, _ flags: NSEvent.ModifierFlags = [], ignoring: String? = nil) async {
+            // The app may be in the background — the test doesn't take the
+            // keyboard from whoever is using the Mac — so the window is found
+            // rather than asked for as the key window. A sheet on it gets the keys.
+            guard let window = Self.typingWindow,
+                  let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
+                                               timestamp: ProcessInfo.processInfo.systemUptime,
+                                               windowNumber: window.windowNumber, context: nil, characters: chars,
+                                               charactersIgnoringModifiers: ignoring ?? chars, isARepeat: false, keyCode: code)
+            else { return print("smoke: keys: no key window") }
+            // In the background AppKit doesn't bring the menu bar up to date
+            // between events, as it does for the app in front; this does.
+            func update(_ menu: NSMenu) {
+                menu.delegate?.menuNeedsUpdate?(menu)
+                menu.update()
+                menu.items.compactMap(\.submenu).forEach(update)
+            }
+            NSApp.mainMenu.map(update)
+            NSApp.sendEvent(event)
+            await wait()
+        }
+        /// Menu items sharing a key, by their titles: only one of them would ever fire.
+        func clashes() -> [String] {
+            func walk(_ menu: NSMenu) -> [(String, String)] {
+                menu.items.flatMap { item -> [(String, String)] in
+                    var out: [(String, String)] = []
+                    // An upper-case key means ⇧ too. The system's Services
+                    // items are left out: they're whatever other apps add.
+                    let key = item.keyEquivalent, shift = key != key.lowercased()
+                    let mask = item.keyEquivalentModifierMask.union(shift ? .shift : [])
+                    if !key.isEmpty { out.append(("\(key.lowercased()) \(mask.rawValue)", item.title)) }
+                    guard item.submenu != NSApp.servicesMenu else { return out }
+                    return out + (item.submenu.map(walk) ?? [])
+                }
+            }
+            return Dictionary(grouping: NSApp.mainMenu.map(walk) ?? [], by: \.0).values
+                .filter { $0.count > 1 }.map { $0.map(\.1).joined(separator: " / ") }
+        }
+        func scrollViews(in view: NSView) -> [NSScrollView] {
+            (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap(scrollViews(in:))
+        }
+        func report(_ what: String, _ ok: Bool) { print("smoke: key \(what): \(ok ? "yes" : "no")"); fflush(stdout) }
+        let arrows: NSEvent.ModifierFlags = [.function, .numericPad]
+        let up = String(Character(UnicodeScalar(NSUpArrowFunctionKey)!))
+        let down = String(Character(UnicodeScalar(NSDownArrowFunctionKey)!))
+
+        select(only: photo.id)
+        await wait()
+        report("no two menu items share a shortcut in the grid \(clashes())", clashes().isEmpty)
+        let wasFavorite = photo.favorite
+        await press(".", 47)
+        report(". adds to favorites in the grid", items.first { $0.id == photo.id }?.favorite == !wasFavorite)
+        await press(".", 47)
+        report(". again takes it back off", items.first { $0.id == photo.id }?.favorite == wasFavorite)
+
+        await press("2", 19, .command)
+        report("⌘2 shows only photos", filter == .photos)
+        await press("1", 18, .command)
+        report("⌘1 shows all", filter == .all)
+
+        let size = thumbnailSize
+        await press("=", 24, .command)
+        let biggerWithEquals = thumbnailSize > size
+        if !biggerWithEquals { await press("+", 24, [.command, .shift]) }
+        report("⌘+ makes thumbnails bigger (⌘= \(biggerWithEquals ? "too" : "alone doesn't"))", thumbnailSize > size)
+        await press("-", 27, .command)
+        report("⌘− makes them smaller again", abs(thumbnailSize - size) < 2)
+        setThumbnailSize(size)
+
+        let whole = showWholePhotos
+        await press("0", 29, .command)
+        report("⌘0 shows whole photos", showWholePhotos != whole)
+        if showWholePhotos != whole { toggleWholePhotos() }
+        report("and the window is still open", Self.typingWindow != nil)
+
+        // The arrow keys move the one photo picked.
+        if items.count > 2 {
+            let columns = GridView.columns(width: gridWidth, cellSize: thumbnailSize)
+            select(only: items[0].id)
+            let right = String(Character(UnicodeScalar(NSRightArrowFunctionKey)!))
+            let left = String(Character(UnicodeScalar(NSLeftArrowFunctionKey)!))
+            func picked() -> Int { selection.count == 1 ? items.firstIndex { $0.id == selection.first } ?? -1 : -1 }
+            await press(right, 124, arrows)
+            report("→ picks the next photo in the grid", picked() == 1)
+            if items.count > columns + 1 {
+                await press(down, 125, arrows)
+                report("↓ the one below it (\(columns) to a row)", picked() == 1 + columns)
+                await press(up, 126, arrows)
+                report("↑ back up", picked() == 1)
+            }
+            await press(left, 123, arrows)
+            report("← back to the first", picked() == 0)
+            await press(left, 123, arrows)
+            report("and no further", picked() == 0)
+            // Far down, the grid scrolls to show it.
+            let far = items.count - 1
+            select(only: items[far - 1].id)
+            await press(right, 124, arrows)
+            report("→ at the end of the grid scrolls to show it (place \(gridTop.map(String.init) ?? "-"))",
+                   picked() == far && gridTop.flatMap { id in items.firstIndex { $0.id == id } }.map { $0 > far - 4 * columns } == true)
+        }
+
+        if let before = sort, before.order != .random {
+            await press(before.ascending ? down : up, before.ascending ? 125 : 126, arrows.union([.command, .option]))
+            report("⌥⌘↑/↓ turns the sort round", sort?.ascending == !before.ascending)
+            await press(before.ascending ? up : down, before.ascending ? 126 : 125, arrows.union([.command, .option]))
+            report("and back", sort?.ascending == before.ascending)
+        }
+
+        clearSelection()
+        // Big thumbnails, so even a small test vault is taller than the window.
+        let top = gridTop, speed = scrollSpeed
+        setThumbnailSize(GridView.sizeRange.upperBound * 0.75)
+        await wait(1.5)
+        setScrollSpeed(80)
+        await press(" ", 49)
+        report("Space starts scrolling by itself", autoScrolling)
+        await wait(3)
+        report("the grid moved down (\(top.map(String.init) ?? "-") then \(gridTop.map(String.init) ?? "-"))", gridTop != top)
+        await press(" ", 49)
+        report("Space pauses it", !autoScrolling)
+        // Its place is where it stopped: away and back, the grid is there.
+        func offset() -> Int { Self.typingWindow?.contentView.flatMap(Self.scrollOffsets(in:))?.split(separator: ",").compactMap { Int($0) }.max() ?? -1 }
+        let stoppedAt = offset()
+        await wait(2.5)
+        scope = .favorites
+        await wait(1.5)
+        scope = .all
+        await wait(2)
+        report("its place is kept (\(stoppedAt) then \(offset()))", abs(offset() - stoppedAt) < Int(thumbnailSize) + 8)
+        setScrollSpeed(speed)
+        await press(" ", 49)
+        await press("x", 7)
+        report("a key pauses it too", !autoScrolling)
+        // Left running, it stops at the bottom. (From near it: a big vault
+        // takes minutes to scroll through.)
+        setScrollSpeed(80)
+        if let grid = Self.typingWindow?.contentView.flatMap(scrollViews(in:))?
+            .max(by: { ($0.documentView?.frame.height ?? 0) < ($1.documentView?.frame.height ?? 0) }),
+           let document = grid.documentView {
+            grid.contentView.scroll(to: NSPoint(x: 0, y: document.frame.height - grid.contentView.bounds.height - 2000))
+            grid.reflectScrolledClipView(grid.contentView)
+        }
+        await wait(1.5)
+        await press(" ", 49)
+        for _ in 0..<40 where autoScrolling { await wait(0.5) }
+        report("it stops by itself at the end", !autoScrolling)
+        let end = offset()
+        await press(" ", 49)
+        report("started at the end, it goes back to the top (\(end) then \(offset()))", autoScrolling && offset() < end - 50)
+        await press(" ", 49)
+        setScrollSpeed(speed)
+
+        // Changing the sort leaves the scroll where it is.
+        if let grid = Self.typingWindow?.contentView.flatMap(scrollViews(in:))?
+            .max(by: { ($0.documentView?.frame.height ?? 0) < ($1.documentView?.frame.height ?? 0) }),
+           let document = grid.documentView, let before = sort, before.order != .random {
+            let y = (document.frame.height - grid.contentView.bounds.height) / 2
+            grid.contentView.scroll(to: NSPoint(x: 0, y: y))
+            grid.reflectScrolledClipView(grid.contentView)
+            await wait(1)
+            let held = Int(grid.contentView.bounds.origin.y)
+            await press(before.ascending ? down : up, before.ascending ? 125 : 126, arrows.union([.command, .option]))
+            await wait(1.5)
+            report("the scroll stays put when the sort turns round (\(held) then \(offset()))", abs(offset() - held) <= 2)
+            await press(before.ascending ? up : down, before.ascending ? 126 : 125, arrows.union([.command, .option]))
+            await wait(1.5)
+            report("and when it turns back (\(offset()))", abs(offset() - held) <= 2)
+        }
+        setThumbnailSize(size)
+
+        // Each view keeps its own All, Photos or Videos.
+        await press("2", 19, .command)
+        scope = .favorites
+        await wait(1.5)
+        let favoritesFilter = filter
+        await press("3", 20, .command)
+        scope = .all
+        await wait(1.5)
+        report("All Media comes back showing only photos, as left", filter == .photos)
+        scope = .favorites
+        await wait(1.5)
+        report("Favorites comes back showing only videos, as left (it opened on \(favoritesFilter))", filter == .videos)
+        await press("1", 18, .command)
+        scope = .all
+        await wait(1.5)
+        await press("1", 18, .command)
+        report("and All Media shows all again", filter == .all)
+
+        // Plain keys belong to a text field being typed in.
+        await press("n", 45, .command)
+        report("⌘N opens New Album", newAlbumSheet != nil)
+        await wait()
+        for (c, code) in [("a", UInt16(0)), (".", 47), (" ", 49), ("r", 15), ("s", 1), ("n", 45)] { await press(c, code) }
+        let sheet = NSApp.windows.first { $0.isSheet && $0.isVisible }
+        let typed = (sheet?.firstResponder as? NSTextView)?.string ?? "-"
+        report("a name typed with . Space R S N is kept whole (\"\(typed)\")", typed == "a. rsn")
+        report("and favorites and scrolling were left alone", items.first { $0.id == photo.id }?.favorite == wasFavorite && !autoScrolling)
+        await press("\u{1b}", 53)
+        report("Esc closes it", newAlbumSheet == nil)
+
+        select(only: photo.id)
+        viewing = photo
+        await wait(1)
+        report("or in the viewer \(clashes())", clashes().isEmpty)
+        await press("r", 15)
+        report("R turns Repeat on in the viewer", repeatOn)
+        await press("r", 15)
+        await press("n", 45)
+        report("N turns Play Next on", nextOn)
+        await press("n", 45)
+        await press(".", 47)
+        report(". adds the photo on screen to favorites", items.first { $0.id == photo.id }?.favorite == !wasFavorite)
+        await press(".", 47)
+        await press("\u{1b}", 53)
+        report("Esc goes back to the library", viewing == nil)
+
+        // Shift on its own opens the photo picked, and goes back again.
+        func tapShift() async {
+            for down in [true, false] {
+                guard let cg = CGEvent(keyboardEventSource: nil, virtualKey: 56, keyDown: down) else { return }
+                cg.type = .flagsChanged
+                cg.flags = down ? .maskShift : []
+                if let event = NSEvent(cgEvent: cg) { NSApp.sendEvent(event) }
+            }
+            await wait(1)
+        }
+        select(only: photo.id)
+        await tapShift()
+        report("⇧ opens the photo picked", viewing?.id == photo.id)
+        await tapShift()
+        report("⇧ again goes back to the library", viewing == nil)
+        if let video = items.first(where: { $0.mediaType == .video && $0.playable }) {
+            select(only: video.id)
+            viewing = video
+            await wait(1.5)
+            await press("\u{1b}", 53)
+            report("Esc goes back from a playing video", viewing == nil)
+        }
+        report("Repeat and Play Next are off again", !repeatOn && !nextOn)
+
+        // With Play Next on, the arrows still go through the view in its
+        // order — a video's too, which took them for itself.
+        let right = String(Character(UnicodeScalar(NSRightArrowFunctionKey)!))
+        // Each followed by a photo: a short test video next would end, and
+        // Play Next would rightly move on from it by itself.
+        func followedByPhoto(_ kind: MediaType) -> PhotoItem? {
+            items.indices.dropLast().first { items[$0].mediaType == kind && items[$0].playable && items[$0 + 1].mediaType == .photo }
+                .map { items[$0] }
+        }
+        for item in [followedByPhoto(.photo), followedByPhoto(.video)].compactMap({ $0 }) {
+            guard let i = items.firstIndex(where: { $0.id == item.id }), i + 1 < items.count else { continue }
+            select(only: item.id)
+            viewing = item
+            // Play Next on only now: a short test video could end while it
+            // loaded, and Play Next would rightly move on by itself.
+            await wait(1.5)
+            nextOn = true
+            await press(right, 124, arrows)
+            report("→ with Play Next on goes to the next \(item.mediaType == .video ? "after a video" : "after a photo") (\(item.id) to \(viewing.map { String($0.id) } ?? "none"), expected \(items[i + 1].id))", viewing?.id == items[i + 1].id)
+            nextOn = false
+            viewing = nil
+            await wait(0.5)
+        }
+        report("the photo is as it was", items.first { $0.id == photo.id }?.favorite == wasFavorite)
+    }
+
+    /// The scroll views' offsets under `view`, for the smoke test's log.
+    static func scrollOffsets(in view: NSView) -> String? {
+        if let scroll = view as? NSScrollView { return "\(Int(scroll.contentView.bounds.origin.y))" }
+        let found = view.subviews.compactMap(scrollOffsets(in:))
+        return found.isEmpty ? nil : found.joined(separator: ",")
+    }
+
     /// Everything that must happen before the volume can go away. Called from
     /// the unmount notification as well as from quit, because Finder can start
     /// an eject without asking us first.
@@ -713,12 +1274,20 @@ final class LibraryModel: ObservableObject {
         tagCounts = (try? await store.tagCounts()) ?? []
         hiddenTags = (try? await store.hiddenTags()) ?? []
         tagByKey = Dictionary(tagCounts.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        if let saved = await store.setting("tags.showR18") {
+            showR18 = saved == "1"
+        } else {
+            // Nothing chosen yet: on if a smart album already uses R18 tags —
+            // whoever made it clearly uses them.
+            let albums = (try? await store.smartAlbums()) ?? []
+            showR18 = albums.contains { $0.rules.map(tagGroups.usesRestricted) ?? false }
+        }
         regroupTags()
     }
 
     private func regroupTags() {
         var byGroup: [String: [TagCount]] = [:]
-        for tag in tagCounts where !hiddenTags.contains(tag.key) {
+        for tag in tagCounts where !hiddenTags.contains(tag.key) && !isHiddenTag(tag.key) {
             for group in tagGroups.groups(of: tag.key) { byGroup[group, default: []].append(tag) }
         }
         tagGroupLists = (tagGroups.names + [TagGroups.other]).compactMap { name in
@@ -728,8 +1297,29 @@ final class LibraryModel: ObservableObject {
 
     /// The most common visible tags, for the filter panel's first row.
     func mostUsedTags(_ n: Int) -> [TagCount] {
-        Array(tagCounts.lazy.filter { !self.hiddenTags.contains($0.key) }.prefix(n))
+        Array(tagCounts.lazy.filter { !self.hiddenTags.contains($0.key) && !self.isHiddenTag($0.key) }.prefix(n))
     }
+
+    /// How many tags the filter can offer.
+    var offeredTagCount: Int { tagCounts.filter { !isHiddenTag($0.key) }.count }
+
+    // MARK: - R18
+
+    /// Image › Classifier › Show R18 Tags. Off, tags in the R18 group are left
+    /// out of a photo's details and the smart album filter's lists — only the
+    /// tags: the photos still show, and smart albums still find them. Kept in
+    /// the vault's catalog.
+    @Published private(set) var showR18 = false
+
+    func setShowR18(_ on: Bool) {
+        guard on != showR18 else { return }
+        showR18 = on
+        regroupTags()
+        Task { await store?.setSetting("tags.showR18", on ? "1" : "0") }
+    }
+
+    /// Whether a tag is kept out of sight: R18, with Show R18 Tags off.
+    func isHiddenTag(_ key: String) -> Bool { !showR18 && tagGroups.isRestricted(key) }
 
     func tagName(_ key: String) -> String { tagByKey[key]?.name ?? key }
 
@@ -1025,9 +1615,14 @@ final class LibraryModel: ObservableObject {
         save(sort)
     }
 
+    /// Counts sort changes made here, so the grid can keep its scroll where
+    /// it is while the photos reorder under it.
+    @Published private(set) var sortChanges = 0
+
     private func save(_ sort: SortSetting) {
         guard let store else { return }
         let scope = self.scope
+        sortChanges += 1
         self.sort = sort
         Task {
             await store.setSortSetting(sort, for: scope)
@@ -1041,12 +1636,13 @@ final class LibraryModel: ObservableObject {
         guard !item.trashed else { return }
         pendingReveal = item.id
         viewing = nil
-        // A filter that would hide it (Photos only, for a video) is cleared.
-        if (filter == .photos && item.mediaType == .video) || (filter == .videos && item.mediaType == .photo) {
-            filter = .all
-        }
+        // A filter that would hide it (Photos only, for a video) is cleared —
+        // All Media's own, once it's open.
         if scope != .all {
+            revealing = item.mediaType
             scope = .all      // reloads, and the reload reveals it
+        } else if (filter == .photos && item.mediaType == .video) || (filter == .videos && item.mediaType == .photo) {
+            filter = .all
         } else {
             Task { await reload() }
         }
@@ -1391,7 +1987,15 @@ final class LibraryModel: ObservableObject {
     /// Whether a text field has keyboard focus — the New Album name, say. Menu
     /// shortcuts like ⌘A and ⌘⌫ then belong to the text, not the photos.
     var isEditingText: Bool {
-        NSApp.keyWindow?.firstResponder is NSText
+        Self.typingWindow?.firstResponder is NSText
+    }
+
+    /// The window keys go to: the key window — or, with the app in the
+    /// background (the smoke test sends it keys without taking the keyboard),
+    /// a sheet showing, else the main window.
+    static var typingWindow: NSWindow? {
+        NSApp.keyWindow ?? NSApp.windows.first { $0.isSheet && $0.isVisible }
+            ?? NSApp.windows.first { $0.isVisible && $0.canBecomeMain }
     }
 
     func selectAllCommand() {
@@ -1435,6 +2039,126 @@ final class LibraryModel: ObservableObject {
     var canTrashCurrent: Bool {
         if let open = viewing { return !open.trashed }
         return scope != .trash && !selection.isEmpty
+    }
+
+    // MARK: - Keyboard commands
+
+    /// A plain key typed while a text field has focus: it goes into the text.
+    /// Menu items on plain keys (".", Space) see the key first — without this
+    /// a full stop or a space could never be typed in a tag search.
+    private func typeIntoText(_ text: String) {
+        (Self.typingWindow?.firstResponder as? NSTextView)?.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))
+    }
+
+    /// "." — Add to Favorites, or Remove: the photo on screen, or the grid's
+    /// selection (all of it favorite → removed, otherwise added).
+    func favoriteCommand() {
+        if isEditingText { return typeIntoText(".") }
+        Task {
+            if viewing != nil {
+                await toggleFavoriteForViewing()
+            } else {
+                await toggleFavorite()
+            }
+        }
+    }
+
+    var canFavoriteCurrent: Bool {
+        if let open = viewing { return !open.trashed }
+        return scope != .trash && !selection.isEmpty
+    }
+
+    /// The Image menu's wording: "Remove from Favorites" when every photo it
+    /// would act on already is one.
+    var favoriteCommandTitle: String {
+        let targets = viewing.map { [$0] } ?? selectedItems
+        return !targets.isEmpty && targets.allSatisfy(\.favorite) ? "Remove from Favorites" : "Add to Favorites"
+    }
+
+    /// ⌘+ and ⌘−: a quarter bigger or smaller each time, within the slider's range.
+    func stepThumbnailSize(bigger: Bool) {
+        let size = thumbnailSize * (bigger ? 1.25 : 0.8)
+        setThumbnailSize(min(GridView.sizeRange.upperBound, max(GridView.sizeRange.lowerBound, size.rounded())))
+    }
+
+    /// ⌥⌘↑ / ⌥⌘↓: oldest first (A to Z) or newest first (Z to A). In Random,
+    /// either one shuffles again.
+    func sortCommand(ascending: Bool) {
+        guard var sort else { return }
+        if sort.order == .random {
+            sort.seed = UInt64.random(in: 1...UInt64.max)
+        } else {
+            guard sort.ascending != ascending else { return }
+            sort.ascending = ascending
+        }
+        save(sort)
+    }
+
+    /// File › New Album (⌘N) and New Smart Album (⌥⌘N). Nil while the sheet
+    /// isn't showing; otherwise whether it opens with Smart album ticked.
+    @Published var newAlbumSheet: NewAlbumKind?
+
+    struct NewAlbumKind: Identifiable {
+        let smart: Bool
+        var id: Bool { smart }
+    }
+
+    /// Help › Keyboard Shortcuts.
+    @Published var showingShortcuts = false
+
+    /// The album or smart album being renamed, from the sidebar or File menu.
+    @Published var renaming: RenameTarget?
+
+    /// The album or smart album on screen, for File › Duplicate and Rename.
+    var currentAlbumTarget: RenameTarget? {
+        switch scope {
+        case .album(let id):
+            return albums.first { $0.id == id }.map { RenameTarget(kind: .album, id: id, name: $0.name) }
+        case .smart(let id):
+            return smartAlbums.first { $0.id == id }.map { RenameTarget(kind: .smart, id: id, name: $0.name) }
+        default:
+            return nil
+        }
+    }
+
+    func duplicateCurrentAlbum() {
+        guard let target = currentAlbumTarget else { return }
+        Task {
+            switch target.kind {
+            case .album: await duplicateAlbum(target.id)
+            case .smart: await duplicateSmartAlbum(target.id)
+            }
+        }
+    }
+
+    /// R and N in the viewer: Repeat and Play Next on or off.
+    func playbackCommand(_ flag: ReferenceWritableKeyPath<LibraryModel, Bool>, key: String) {
+        if isEditingText { return typeIntoText(key) }
+        guard viewing != nil else { return }
+        self[keyPath: flag].toggle()
+    }
+
+    // MARK: - Scrolling by itself
+
+    /// The grid scrolling down on its own (Space, or the toolbar's play
+    /// button). Scrolling, a click in the grid, a key, opening a photo or
+    /// changing view stops it. Never saved: a vault always opens still.
+    @Published var autoScrolling = false { didSet { updateSlideshowAssertion() } }
+    /// How fast, in rows of thumbnails a minute — the same pace at any
+    /// thumbnail size. Saved per vault.
+    @Published private(set) var scrollSpeed: Double = 10
+    static let scrollSpeeds: [Double] = [2, 5, 10, 20, 40, 80]
+
+    func setScrollSpeed(_ rows: Double) {
+        scrollSpeed = rows
+        Task { await store?.setSetting("grid.scrollSpeed", String(rows)) }
+    }
+
+    /// Space: start or pause. While typing, Space is a space.
+    func autoScrollCommand() {
+        if isEditingText { return typeIntoText(" ") }
+        guard viewing == nil, !items.isEmpty else { return }
+        autoScrolling.toggle()
     }
 
     var scopeTitle: String {

@@ -17,7 +17,8 @@ public struct ScanResult: Sendable {
     /// Which directories were walked. On an incremental pass, only files under
     /// these may be concluded missing — everything else was simply not looked at.
     public var enumeratedDirs: Set<String> = []
-    /// Known directories that no longer exist.
+    /// Known directories that no longer exist — renamed, moved or deleted.
+    /// Their photos are gone from there, on an incremental pass too.
     public var vanishedDirs: [String] = []
     public var isFull = false
 

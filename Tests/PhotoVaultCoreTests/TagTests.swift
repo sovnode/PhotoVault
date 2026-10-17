@@ -166,6 +166,20 @@ struct TagGroupsTests {
         #expect(groups.groups(of: "cat ears") == ["Fantasy and sci-fi"])
         #expect(groups.members.values.reduce(0) { $0 + $1.count } == 5_813)
     }
+
+    /// R18 tags stay out of sight unless asked for; a smart album already
+    /// using one is how a reinstall knows they were.
+    @Test func knowsWhichTagsAndRulesAreR18() {
+        let groups = TagGroups(text: "[People]\nchild\n[R18]\nnude\n")
+        #expect(groups.isRestricted("nude"))
+        #expect(!groups.isRestricted("child"))
+        #expect(!groups.isRestricted("tractor"), "a tag in no group isn't")
+        #expect(!groups.usesRestricted(TagRules(items: [.init(kind: .tag, name: "child", state: .include)])))
+        #expect(groups.usesRestricted(TagRules(items: [.init(kind: .tag, name: "nude", state: .exclude)])),
+                "excluding one counts too")
+        #expect(groups.usesRestricted(TagRules(items: [.init(kind: .group, name: "R18", state: .include)])))
+        #expect(!groups.usesRestricted(TagRules(items: [.init(kind: .group, name: "People", state: .include)])))
+    }
 }
 
 @Suite("Tags in the catalog", .serialized)

@@ -19,7 +19,7 @@ struct GridView: View {
     /// Up to 600 points: a few photos across with the sidebar hidden. The
     /// 512-pixel thumbnails are sharp to about 256 points on a Retina screen,
     /// slightly soft above; the viewer shows the full photo.
-    private static let sizeRange: ClosedRange<Double> = 90...600
+    static let sizeRange: ClosedRange<Double> = 90...600
 
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: cellSize, maximum: cellSize * 1.5), spacing: 8)]
@@ -48,6 +48,11 @@ struct GridView: View {
                                 // coming — the lag on selection. The click count of the
                                 // event itself says whether this is the second click.
                                 .onTapGesture {
+                                    // The arrow keys belong to the grid after a
+                                    // click in it, not to the sidebar clicked last.
+                                    if let window = NSApp.keyWindow, window.firstResponder is NSTableView {
+                                        window.makeFirstResponder(nil)
+                                    }
                                     if (NSApp.currentEvent?.clickCount ?? 1) >= 2 {
                                         model.select(only: item.id)
                                         model.viewing = item
@@ -60,9 +65,20 @@ struct GridView: View {
                     }
                     .scrollTargetLayout()
                     .padding(8)
+                    .onGeometryChange(for: CGFloat.self, of: { $0.size.width }) { model.gridWidth = $0 }
+                    // Drives the scroll view this grid sits in while it
+                    // scrolls by itself.
+                    .background(AutoScroller(running: model.autoScrolling,
+                                             pointsPerSecond: model.scrollSpeed * (cellSize + 8) / 60,
+                                             reveal: model.revealRequest,
+                                             holdToken: model.sortChanges,
+                                             rowHeight: cellSize,
+                                             onStop: { model.autoScrolling = false },
+                                             onMoved: { y, width in notePlace(atOffset: y, width: width) }))
                 }
                 .scrollPosition(id: $topID, anchor: .topLeading)
-                .onChange(of: topID) { _, id in model.notePlace(id) }
+                // Not when it's cleared after scrolling by itself (below).
+                .onChange(of: topID) { _, id in if let id { model.notePlace(id) } }
                 // `.task(id:)` rather than onChange: it also runs when the grid
                 // first appears, which on opening a vault is the same moment
                 // the request to go to its place is made — onChange missed it.
@@ -119,6 +135,28 @@ struct GridView: View {
         }
     }
 
+    /// The grid scrolled by itself: SwiftUI's scroll position doesn't follow
+    /// a scroll it didn't make, so the photo at the top-left is worked out
+    /// from the offset — the grid's rows are regular — and kept as the place.
+    /// The stale position is cleared, so asking for that photo later still
+    /// scrolls to it.
+    private func notePlace(atOffset y: CGFloat, width: CGFloat) {
+        let columns = Self.columns(width: width, cellSize: cellSize)
+        let row = max(0, Int(((Double(y) - Self.padding) / (cellSize + Self.spacing)).rounded()))
+        let index = min(model.items.count - 1, row * columns)
+        guard index >= 0 else { return }
+        if topID != nil { topID = nil }
+        model.notePlace(model.items[index].id)
+    }
+
+    static let spacing = 8.0, padding = 8.0
+
+    /// How many photos a row holds at `width` — as the adaptive grid works it
+    /// out: as many of the smallest size as fit, spacing between.
+    static func columns(width: CGFloat, cellSize: Double) -> Int {
+        max(1, Int((Double(width) - 2 * padding + spacing) / (cellSize + spacing)))
+    }
+
     /// `onTapGesture` reports no modifiers on macOS, so the flags are read from
     /// the current event instead. They are accurate at the moment the tap is
     /// dispatched, which is exactly when this runs.
@@ -139,6 +177,7 @@ struct GridView: View {
             }
             .pickerStyle(.segmented)
             .frame(width: 220)
+            .help("Show all, only photos or only videos (⌘1, ⌘2, ⌘3)")
 
             Spacer()
             ActivityStatus(activity: model.activity)
@@ -170,19 +209,48 @@ struct GridView: View {
                         .frame(width: 14)
                 }
                 .help(sort.order == .random
-                      ? "Shuffle again"
-                      : "\(sort.order.directionLabel(ascending: sort.ascending)). Click for \(sort.order.directionLabel(ascending: !sort.ascending).lowercased()).")
+                      ? "Shuffle again (⌥⌘↑)"
+                      : "\(sort.order.directionLabel(ascending: sort.ascending)). Click for \(sort.order.directionLabel(ascending: !sort.ascending).lowercased()) (\((sort.ascending ? Shortcut.sortDown : .sortUp).label)).")
                 .accessibilityLabel(sort.order == .random ? "Shuffle again" : sort.order.directionLabel(ascending: sort.ascending))
             }
+
+            autoScrollButton
 
             Image(systemName: "photo")
                 .font(.caption2)
             Slider(value: Binding(get: { model.thumbnailSize }, set: { model.setThumbnailSize($0) }),
                    in: Self.sizeRange).frame(width: 120)
+                .help("Thumbnail size (⌘+, ⌘−)")
             Image(systemName: "photo.fill")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    /// Play/pause for scrolling by itself, with the speed in its menu.
+    private var autoScrollButton: some View {
+        Menu {
+            ForEach(LibraryModel.scrollSpeeds, id: \.self) { rows in
+                Toggle(Self.speedLabel(rows), isOn: Binding(get: { model.scrollSpeed == rows },
+                                                            set: { _ in model.setScrollSpeed(rows) }))
+            }
+        } label: {
+            Image(systemName: model.autoScrolling ? "pause.fill" : "play.fill")
+        } primaryAction: {
+            model.autoScrollCommand()
+        }
+        .menuStyle(.button)
+        .fixedSize()
+        .disabled(model.items.isEmpty)
+        .help(Shortcut.autoScroll.help(model.autoScrolling
+              ? "Pause scrolling. Scrolling, clicking or a key pauses it too"
+              : "Scroll down by itself, \(Self.speedLabel(model.scrollSpeed).lowercased()); the arrow beside it sets the speed"))
+        .accessibilityLabel(model.autoScrolling ? "Pause scrolling" : "Scroll automatically")
+    }
+
+    /// "10 rows a minute".
+    static func speedLabel(_ rows: Double) -> String {
+        "\(Int(rows)) \(rows == 1 ? "row" : "rows") a minute"
     }
 
     private var emptyState: some View {
@@ -224,6 +292,7 @@ struct GridView: View {
         Button(allFavorite ? "Remove \(noun) from Favorites" : "Add \(noun) to Favorites") {
             Task { await model.setFavorite(!allFavorite, for: targets) }
         }
+        .shortcut(.favorite)
         Menu("Add \(noun) to Album") {
             Button("New Album…") { model.newAlbumRequest = .init(photoIDs: targets.map(\.id)) }
             if !model.albums.isEmpty { Divider() }
@@ -240,8 +309,10 @@ struct GridView: View {
         }
         Divider()
         Button("Rotate Left") { Task { await model.rotate(rotatable, clockwise: false) } }
+            .shortcut(.rotateLeft)
             .disabled(rotatable.isEmpty)
         Button("Rotate Right") { Task { await model.rotate(rotatable, clockwise: true) } }
+            .shortcut(.rotateRight)
             .disabled(rotatable.isEmpty)
         Button(targets.count == 1 ? "Re-tag with JoyTag" : "Re-tag \(targets.count) Photos with JoyTag") {
             model.retag(targets)
@@ -249,6 +320,7 @@ struct GridView: View {
         .disabled(!model.canTag || model.scanning)
         Divider()
         Button("Move \(noun) to Trash") { Task { await model.moveToTrash(targets) } }
+            .shortcut(.trash)
         }
         if model.scope != .all, model.scope != .trash, targets.count == 1 {
             Divider()
@@ -420,5 +492,229 @@ struct NewAlbumForPhotosSheet: View {
         let name = trimmed, ids = request.photoIDs
         dismiss()
         Task { await model.newAlbum(named: name, adding: ids) }
+    }
+}
+
+/// Scrolls the NSScrollView behind the grid down at a steady pace, once per
+/// display frame, while `running`. Started at the bottom, it goes back to the
+/// top first. Stops — through `onStop` — at the bottom, and when the person scrolls,
+/// clicks in the grid or presses a key: scrolling by itself should never fight
+/// them. The grid's place follows the scroll as it would by hand.
+struct AutoScroller: NSViewRepresentable {
+    let running: Bool
+    let pointsPerSecond: Double
+    /// A photo to bring into view (the arrow keys moved to it), by its index.
+    let reveal: LibraryModel.RevealRequest?
+    /// Changes when the sort does: the scroll stays where it is, rather than
+    /// following the photo that was at the top to its new spot.
+    let holdToken: Int
+    let rowHeight: Double
+    let onStop: () -> Void
+    /// Where it has got to — the offset and the grid's width — every half
+    /// second and when it stops.
+    let onMoved: (CGFloat, CGFloat) -> Void
+
+    func makeNSView(context: Context) -> DriverView { DriverView() }
+
+    func updateNSView(_ view: DriverView, context: Context) {
+        view.speed = pointsPerSecond
+        view.onStop = onStop
+        view.onMoved = onMoved
+        if view.heldToken == nil {
+            view.heldToken = holdToken
+        } else if holdToken != view.heldToken {
+            view.heldToken = holdToken
+            view.holdScroll()
+        }
+        if let reveal, reveal != view.revealed {
+            view.revealed = reveal
+            view.reveal(index: reveal.index, rowHeight: rowHeight)
+        }
+        view.running = running
+    }
+
+    static func dismantleNSView(_ view: DriverView, coordinator: ()) { view.running = false }
+
+    final class DriverView: NSView {
+        var speed: Double = 0
+        var onStop: () -> Void = {}
+        var onMoved: (CGFloat, CGFloat) -> Void = { _, _ in }
+        /// Where the scroll would be: the clip view's origin is rounded to
+        /// device pixels, so slow speeds would never move off the spot.
+        private var position: CGFloat = 0
+        private var lastFrame: CFTimeInterval?
+        private var link: CADisplayLink?
+        /// Stands in for the display link where it never fires — seen on a
+        /// virtual display.
+        private var timer: Timer?
+        private var monitor: Any?
+        private var frames = 0
+        private var rewinding = false
+        var revealed: LibraryModel.RevealRequest?
+        var heldToken: Int?
+        private var holdObserver: Any?
+
+        /// Keeps the scroll offset as it is while the grid reorders: the grid
+        /// lets go of the photo at its top, and for a moment any move the
+        /// reorder makes is undone. Then the photo now at the top is the place.
+        func holdScroll() {
+            guard let scroll = enclosingScrollView else { return }
+            let clip = scroll.contentView
+            let y = clip.bounds.origin.y
+            onMoved(y, clip.bounds.width)
+            if let holdObserver { NotificationCenter.default.removeObserver(holdObserver) }
+            clip.postsBoundsChangedNotifications = true
+            holdObserver = NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
+            ) { [weak scroll] _ in
+                MainActor.assumeIsolated {
+                    guard let scroll, let document = scroll.documentView else { return }
+                    let target = min(y, Self.bottom(of: scroll, document))
+                    guard abs(scroll.contentView.bounds.origin.y - target) > 1 else { return }
+                    scroll.contentView.scroll(to: NSPoint(x: scroll.contentView.bounds.origin.x, y: target))
+                    scroll.reflectScrolledClipView(scroll.contentView)
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                guard let self, let scroll = self.enclosingScrollView else { return }
+                if let observer = self.holdObserver { NotificationCenter.default.removeObserver(observer) }
+                self.holdObserver = nil
+                self.onMoved(scroll.contentView.bounds.origin.y, scroll.contentView.bounds.width)
+                SmokeHooks.say("sort changed, scroll held at \(Int(y)), now \(Int(scroll.contentView.bounds.origin.y))")
+            }
+        }
+
+        /// Scrolls just far enough that the row holding photo `index` shows
+        /// whole — not at all if it does already.
+        func reveal(index: Int, rowHeight: Double) {
+            guard let scroll = enclosingScrollView, let document = scroll.documentView else { return }
+            let clip = scroll.contentView
+            let columns = GridView.columns(width: clip.bounds.width, cellSize: rowHeight)
+            let top = CGFloat(GridView.padding + Double(index / columns) * (rowHeight + GridView.spacing))
+            let bottom = top + CGFloat(rowHeight)
+            var y = clip.bounds.origin.y
+            if top < y {
+                y = top - CGFloat(GridView.padding)
+            } else if bottom > y + clip.bounds.height {
+                y = bottom + CGFloat(GridView.padding) - clip.bounds.height
+            } else {
+                return
+            }
+            y = min(max(0, y), Self.bottom(of: scroll, document))
+            clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: y))
+            scroll.reflectScrolledClipView(clip)
+            position = y
+            onMoved(y, clip.bounds.width)
+        }
+
+        var running = false {
+            didSet { if running != oldValue { running ? start() : stop() } }
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        private func start() {
+            guard let scroll = enclosingScrollView else { return DispatchQueue.main.async { self.onStop() } }
+            position = scroll.contentView.bounds.origin.y
+            // The grid lets go of the photo it last scrolled to: holding on to
+            // it, SwiftUI pulled the grid back there as new rows were laid out.
+            let rewind = Self.atEnd(position, of: scroll)
+            onMoved(rewind ? 0 : position, scroll.contentView.bounds.width)
+            if rewind {
+                // Back to the top once it has let go — on the next turn.
+                position = 0
+                rewinding = true
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, let scroll = self.enclosingScrollView else { return }
+                    self.rewinding = false
+                    scroll.contentView.scroll(to: NSPoint(x: scroll.contentView.bounds.origin.x, y: 0))
+                    scroll.reflectScrolledClipView(scroll.contentView)
+                }
+            }
+            lastFrame = nil
+            frames = 0
+            let link = displayLink(target: self, selector: #selector(linkFired(_:)))
+            link.add(to: .main, forMode: .common)
+            self.link = link
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self, self.running, self.frames == 0, self.timer == nil else { return }
+                SmokeHooks.say("auto-scroll: no display frames, using a timer")
+                let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.step(at: CACurrentMediaTime()) }
+                }
+                RunLoop.main.add(timer, forMode: .common)
+                self.timer = timer
+            }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
+                self?.interrupted(by: event)
+                return event
+            }
+            SmokeHooks.say("auto-scroll started at \(Int(position)) of \(scroll.documentView.map { Int(Self.bottom(of: scroll, $0)) } ?? -1)")
+        }
+
+        private func stop() {
+            if let scroll = enclosingScrollView, frames > 0 {
+                onMoved(scroll.contentView.bounds.origin.y, scroll.contentView.bounds.width)
+            }
+            link?.invalidate()
+            link = nil
+            timer?.invalidate()
+            timer = nil
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+        }
+
+        /// A scroll or click in the grid, or a key — except Space and ⌘
+        /// shortcuts, which are the menu's: Space pauses it there, and ⌘+
+        /// can change the size while it runs.
+        private func interrupted(by event: NSEvent) {
+            guard let scroll = enclosingScrollView, event.window === window else { return }
+            switch event.type {
+            case .keyDown:
+                if event.keyCode == 49 || event.modifierFlags.contains(.command) { return }
+            case .scrollWheel, .leftMouseDown, .rightMouseDown:
+                let point = scroll.convert(event.locationInWindow, from: nil)
+                guard scroll.bounds.contains(point) else { return }
+            default:
+                return
+            }
+            onStop()
+        }
+
+        /// The furthest the grid scrolls.
+        static func bottom(of scroll: NSScrollView, _ document: NSView) -> CGFloat {
+            max(0, document.frame.height - scroll.contentView.bounds.height)
+        }
+
+        /// At the bottom, give or take the clip view's rounding to pixels.
+        static func atEnd(_ y: CGFloat, of scroll: NSScrollView) -> Bool {
+            guard let document = scroll.documentView else { return true }
+            return y >= bottom(of: scroll, document) - 2
+        }
+
+        @objc private func linkFired(_ link: CADisplayLink) {
+            if timer != nil { link.invalidate(); self.link = nil; return }
+            step(at: link.timestamp)
+        }
+
+        private func step(at now: CFTimeInterval) {
+            guard let scroll = enclosingScrollView, let document = scroll.documentView else { return onStop() }
+            guard !rewinding else { return }
+            defer { lastFrame = now }
+            guard let last = lastFrame else { return }
+            let clip = scroll.contentView
+            // Picks up a scroll made since — a resize, or the place restored.
+            if abs(clip.bounds.origin.y - position) > 2 { position = clip.bounds.origin.y }
+            let bottom = Self.bottom(of: scroll, document)
+            if Self.atEnd(position, of: scroll) {
+                SmokeHooks.say("auto-scroll reached the end")
+                return onStop()
+            }
+            position = min(bottom, position + CGFloat(speed * min(now - last, 0.1)))
+            clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: position))
+            scroll.reflectScrolledClipView(clip)
+            frames += 1
+            if frames % 30 == 0 { onMoved(position, clip.bounds.width) }
+        }
     }
 }

@@ -102,6 +102,176 @@ struct StoreTests {
         await store.close()
     }
 
+    // MARK: Folders renamed, moved or deleted, on the quick rescan
+
+    /// The quick rescan opening does: a folder renamed, moved into another or
+    /// emptied and deleted must leave its photos the same photos at their new
+    /// paths — no new thumbnails, no new tags, favorites and albums kept.
+    /// Before the fix, a folder that had vanished was skipped, its photos were
+    /// never marked gone, and every one turned up again as a new photo.
+    private func expectMovedByQuickRescan(_ move: (FileManager) throws -> Void, to newPaths: [String: String]) async throws {
+        try vault.writeImage("2019/a.jpg", seed: 0.21)
+        try vault.writeImage("2019/sub/b.jpg", seed: 0.42)
+        let store = try makeStore()
+        try await store.scan(full: true)
+        let before = try await store.items(scope: .all, filter: .all)
+        let a = try #require(before.first { $0.displayName == "a.jpg" })
+        let b = try #require(before.first { $0.displayName == "b.jpg" })
+        try await store.setFavorite(true, for: [a.id])
+        let album = try await store.createAlbum(named: "Kept")
+        try await store.addToAlbum(album, photoIDs: [b.id])
+        let pack = packSize
+
+        try move(FileManager.default)
+        try await store.scan(full: false)
+
+        #expect(try await store.photoCount() == 2, "no second row for a moved photo")
+        let movedA = try #require(try await store.photo(id: a.id))
+        let movedB = try #require(try await store.photo(id: b.id))
+        #expect(movedA.relPath == newPaths["a.jpg"])
+        #expect(movedB.relPath == newPaths["b.jpg"])
+        #expect(!movedA.missing && !movedB.missing)
+        #expect(movedA.favorite, "the favorite moved with it")
+        #expect(try await store.albumCount(album) == 1, "and the album membership")
+        #expect(movedA.hasThumb && movedB.hasThumb)
+        #expect(packSize == pack, "no thumbnail made again")
+        await store.close()
+    }
+
+    @Test func aRenamedFolderKeepsItsPhotos() async throws {
+        let photos = vault.photos
+        try await expectMovedByQuickRescan({ fm in
+            try fm.moveItem(at: photos.appendingPathComponent("2019"), to: photos.appendingPathComponent("Summer 2019"))
+        }, to: ["a.jpg": "Photos/Summer 2019/a.jpg", "b.jpg": "Photos/Summer 2019/sub/b.jpg"])
+    }
+
+    @Test func aFolderMovedIntoANewOneKeepsItsPhotos() async throws {
+        let photos = vault.photos
+        try await expectMovedByQuickRescan({ fm in
+            try fm.createDirectory(at: photos.appendingPathComponent("Archive"), withIntermediateDirectories: true)
+            try fm.moveItem(at: photos.appendingPathComponent("2019"), to: photos.appendingPathComponent("Archive/2019"))
+        }, to: ["a.jpg": "Photos/Archive/2019/a.jpg", "b.jpg": "Photos/Archive/2019/sub/b.jpg"])
+    }
+
+    @Test func photosMovedOutOfAFolderThenDeletedAreKept() async throws {
+        let photos = vault.photos
+        try await expectMovedByQuickRescan({ fm in
+            try fm.createDirectory(at: photos.appendingPathComponent("Family"), withIntermediateDirectories: true)
+            try fm.moveItem(at: photos.appendingPathComponent("2019/a.jpg"), to: photos.appendingPathComponent("Family/a.jpg"))
+            try fm.moveItem(at: photos.appendingPathComponent("2019/sub/b.jpg"), to: photos.appendingPathComponent("Family/b.jpg"))
+            try fm.removeItem(at: photos.appendingPathComponent("2019"))
+        }, to: ["a.jpg": "Photos/Family/a.jpg", "b.jpg": "Photos/Family/b.jpg"])
+    }
+
+    /// A deleted folder's photos are gone, on the quick rescan too.
+    @Test func aDeletedFolderIsGoneOnTheQuickRescan() async throws {
+        try vault.writeImage("keep.jpg", seed: 0.1)
+        try vault.writeImage("old/a.jpg", seed: 0.2)
+        let store = try makeStore()
+        try await store.scan(full: true)
+        try FileManager.default.removeItem(at: vault.photos.appendingPathComponent("old"))
+        try await store.scan(full: false)
+        #expect(try await store.photoCount() == 1)
+        #expect(try await store.items(scope: .all, filter: .all).map(\.relPath) == ["Photos/keep.jpg"])
+        await store.close()
+    }
+
+    /// Two identical files where one was: the moved photo takes one path, the
+    /// copy gets a row of its own — not one row tried on both, which left a
+    /// path with no row at all.
+    @Test func aMovedPhotoWithACopyGivesEachFileARow() async throws {
+        try vault.writeImage("x/a.jpg", seed: 0.77)
+        let store = try makeStore()
+        try await store.scan(full: true)
+        let original = try #require(try await store.items(scope: .all, filter: .all).first)
+        let fm = FileManager.default
+        try fm.moveItem(at: vault.photos.appendingPathComponent("x"), to: vault.photos.appendingPathComponent("y"))
+        try fm.createDirectory(at: vault.photos.appendingPathComponent("z"), withIntermediateDirectories: true)
+        try fm.copyItem(at: vault.photos.appendingPathComponent("y/a.jpg"), to: vault.photos.appendingPathComponent("z/a.jpg"))
+        try await store.scan(full: false)
+
+        let rows = try await store.items(scope: .all, filter: .all)
+        #expect(Set(rows.map(\.relPath)) == ["Photos/y/a.jpg", "Photos/z/a.jpg"])
+        #expect(rows.contains { $0.id == original.id }, "the original row is one of them")
+        await store.close()
+    }
+
+    /// What the bug left in a vault: the old row still present in a folder
+    /// that's gone (and no longer in the directory state), and a second row
+    /// for the same photo at its new path. The next quick rescan puts the old
+    /// row — favorite, album, thumbnail — on the new path and drops the other.
+    @Test func rowsLeftByTheOldBugAreRepairedOnTheQuickRescan() async throws {
+        try vault.writeImage("old/a.jpg", seed: 0.55)
+        var store = try makeStore()
+        try await store.scan(full: true)
+        let original = try #require(try await store.items(scope: .all, filter: .all).first)
+        try await store.setFavorite(true, for: [original.id])
+        let album = try await store.createAlbum(named: "Kept")
+        try await store.addToAlbum(album, photoIDs: [original.id])
+        await store.close()
+
+        let fm = FileManager.default
+        try fm.moveItem(at: vault.photos.appendingPathComponent("old"), to: vault.photos.appendingPathComponent("new"))
+        do {
+            let catalog = try Catalog(url: vault.catalogFile)
+            let url = vault.photos.appendingPathComponent("new/a.jpg")
+            let size = Int64(vault.fileSize(url))
+            let mtime = try #require(try url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+            try catalog.upsertPhoto(PhotoItem(relPath: "Photos/new/a.jpg", fileSize: size,
+                                              mtime: mtime.timeIntervalSince1970, contentKey: ContentKey.compute(url: url, fileSize: size)))
+            try catalog.removeDirStates(["Photos/old"])
+            for dir in ["Photos", "Photos/new"] {
+                try catalog.setDirState(dir, mtime: try #require(Scanner.directoryMTime(vault.root.appendingPathComponent(dir))))
+            }
+            catalog.closeCleanly()
+        }
+
+        store = try makeStore()
+        try await store.scan(full: false)
+        #expect(try await store.photoCount() == 1, "the duplicate is gone")
+        let row = try #require(try await store.photo(id: original.id))
+        #expect(row.relPath == "Photos/new/a.jpg" && !row.missing)
+        #expect(row.favorite && row.hasThumb)
+        #expect(try await store.albumCount(album) == 1)
+        await store.close()
+    }
+
+    /// An identical copy someone has made a favorite (or put in an album) is a
+    /// photo of its own: a vanished twin isn't moved on to it.
+    @Test func aCopyInUseIsNotTakenOverByAVanishedTwin() async throws {
+        try vault.writeImage("x/a.jpg", seed: 0.66)
+        try FileManager.default.createDirectory(at: vault.photos.appendingPathComponent("y"), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: vault.photos.appendingPathComponent("x/a.jpg"),
+                                         to: vault.photos.appendingPathComponent("y/a.jpg"))
+        let store = try makeStore()
+        try await store.scan(full: true)
+        let rows = try await store.items(scope: .all, filter: .all)
+        let x = try #require(rows.first { $0.relPath == "Photos/x/a.jpg" })
+        let y = try #require(rows.first { $0.relPath == "Photos/y/a.jpg" })
+        try await store.setFavorite(true, for: [y.id])
+
+        try FileManager.default.removeItem(at: vault.photos.appendingPathComponent("x"))
+        try await store.scan(full: false)
+        #expect(try await store.photo(id: y.id)?.relPath == "Photos/y/a.jpg", "the copy keeps its own row")
+        #expect(try await store.photo(id: x.id)?.missing == true)
+        await store.close()
+    }
+
+    /// The whole Photos folder briefly not there — a vault half-mounted — is
+    /// not every photo deleted.
+    @Test func aMissingPhotosFolderMarksNothingGone() async throws {
+        try vault.writeImage("a.jpg", seed: 0.3)
+        let store = try makeStore()
+        try await store.scan(full: true)
+        let aside = vault.root.appendingPathComponent("Photos-aside")
+        try FileManager.default.moveItem(at: vault.photos, to: aside)
+        try await store.scan(full: false)
+        try await store.scan(full: true)
+        try FileManager.default.moveItem(at: aside, to: vault.photos)
+        #expect(try await store.photoCount() == 1)
+        await store.close()
+    }
+
     @Test func unopenableVideoIsBadgedRatherThanRetried() async throws {
         try vault.writeJunk("broken.mkv", bytes: 8192)
         let store = try makeStore()

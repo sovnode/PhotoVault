@@ -36,3 +36,41 @@ struct DeleteAlbumsWordingTests {
         #expect(SidebarView.count(albums: 1, smart: 2) == "1 Album and 2 Smart Albums")
     }
 }
+
+@MainActor
+@Suite("Keyboard shortcuts")
+struct ShortcutTests {
+    @Test func noTwoCommandsShareAKey() {
+        // Plain keys may repeat across places that are never live together:
+        // R is Repeat in the viewer, never a library command.
+        let keys = Shortcut.allCases.map { "\($0.label) \($0.place == .viewer && $0.modifiers.isEmpty ? "viewer" : "")" }
+        #expect(Set(keys).count == keys.count, "\(Dictionary(grouping: keys, by: { $0 }).filter { $0.value.count > 1 }.keys)")
+    }
+
+    @Test func readAsTheMenusShowThem() {
+        #expect(Shortcut.sortUp.label == "⌥⌘↑")
+        #expect(Shortcut.fullRescan.label == "⌥⇧⌘R")
+        #expect(Shortcut.favorite.label == ".")
+        #expect(Shortcut.autoScroll.label == "Space")
+        #expect(Shortcut.smallerThumbnails.label == "⌘−")
+        #expect(Shortcut.trash.help("Move to Trash") == "Move to Trash (⌘⌫)")
+    }
+
+    @Test func everyShortcutIsListedSomewhere() {
+        for place in Shortcut.Place.allCases {
+            #expect(Shortcut.allCases.contains { $0.place == place })
+        }
+    }
+}
+
+@MainActor
+@Suite("The grid's rows")
+struct GridColumnsTests {
+    @Test func countsPhotosToARowAsTheGridDoes() {
+        // 8 points of padding each side, 8 between.
+        #expect(GridView.columns(width: 16 + 160, cellSize: 160) == 1)
+        #expect(GridView.columns(width: 16 + 160 * 4 + 8 * 3, cellSize: 160) == 4)
+        #expect(GridView.columns(width: 16 + 160 * 4 + 8 * 3 - 1, cellSize: 160) == 3)
+        #expect(GridView.columns(width: 0, cellSize: 160) == 1, "never none")
+    }
+}

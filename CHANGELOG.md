@@ -6,6 +6,30 @@ major version changes how vaults are stored.
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-10-17
+
+- **Scroll automatically**: Play in the grid's toolbar (or Space) scrolls an
+  album, folder or All Media slowly by itself, at a speed you choose.
+- **Keyboard shortcuts**, shown in the menus, right-click menus and tooltips,
+  and all listed in Help › Keyboard Shortcuts (⌘?). New ones for new albums,
+  the All / Photos / Videos filter, thumbnail size, Show Whole Photos (⌘0),
+  sort direction, Repeat and Play Next. The full stop (.) adds to Favorites
+  anywhere; the arrow keys move through the grid's photos; Shift on its own
+  opens the photo picked, and goes back again.
+- **PhotoVault opens where you left it**: the same view, filter and place,
+  with the photo that was open. Each view keeps its own All, Photos or Videos.
+- **R18 tags hidden** in a photo's details and the smart album filter unless
+  Image › Classifier › Show R18 Tags is ticked. Only the tags: photos and smart
+  albums are unaffected.
+- **Random in the viewer** gives way to the Random sort order, which Play Next
+  follows.
+- Fixed: renaming, moving or deleting a folder made its photos look new —
+  thumbnailed and tagged again, with their favorites and albums left behind
+  on the old entries. They're now followed to their new place, and a vault
+  this happened to is repaired when it next opens.
+- Fixed: Esc didn't leave a playing video; the arrow keys skipped through a
+  video instead of moving to the next item; changing the sort moved the grid.
+
 ## [1.5.0] — 2026-10-15
 
 - **Sorting**: by video length and at random too, either way round; albums can

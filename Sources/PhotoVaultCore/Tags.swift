@@ -245,4 +245,20 @@ public struct TagGroups: Sendable, Equatable {
     public func groups(of key: String) -> [String] {
         groupsOf[key] ?? [TagGroups.other]
     }
+
+    /// The group of nude and explicit tags, hidden unless asked for.
+    public static let restricted = "R18"
+
+    /// Whether a tag is listed in the R18 group — in this vault's own groups
+    /// file, where it can be moved in or out.
+    public func isRestricted(_ key: String) -> Bool {
+        groupsOf[key]?.contains(TagGroups.restricted) ?? false
+    }
+
+    /// Whether `rules` use R18: the group itself, or any tag in it.
+    public func usesRestricted(_ rules: TagRules) -> Bool {
+        rules.items.contains { item in
+            item.kind == .group ? item.name == TagGroups.restricted : isRestricted(item.name)
+        }
+    }
 }
