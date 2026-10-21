@@ -18,6 +18,8 @@ enum Headless {
 
           --size <size>       the most the new vault can hold, as hdiutil reads it: 500g, 1t
           --allow-older       install over a newer PhotoVault
+          --without-tagging   leave photo tagging (JoyTag) off the vault — and take it
+                              off one that has it — to save its space
           --password-stdin    a password, read from standard input: protects a new
                               vault, or opens a protected one to install on it
           --mount-root <dir>  mount disk images there, out of Finder's sidebar
@@ -51,6 +53,7 @@ enum Headless {
         var values: [String: String] = [:]
         var allowOlder = false
         var passwordFromStdin = false
+        var tagging = true
         var i = 0
         while i < args.count {
             let arg = args[i]
@@ -60,6 +63,9 @@ enum Headless {
                 i += 2
             } else if arg == "--allow-older" {
                 allowOlder = true
+                i += 1
+            } else if arg == "--without-tagging" {
+                tagging = false
                 i += 1
             } else if arg == "--password-stdin" {
                 passwordFromStdin = true
@@ -101,7 +107,7 @@ enum Headless {
                 print("PhotoVault Installer \(payload.version): creating “\(name)” in \(target.deletingLastPathComponent().path)")
                 let report = try VaultSetup.create(name: name, in: target.deletingLastPathComponent(),
                                                    size: values["--size"] ?? VaultSetup.defaultSize, payload: payload,
-                                                   password: password, mountRoot: mountRoot, progress: say)
+                                                   password: password, tagging: tagging, mountRoot: mountRoot, progress: say)
                 describe(report)
             } else {
                 let (vault, _) = try VaultSetup.open(target, mountRoot: mountRoot, password: password)
@@ -109,7 +115,7 @@ enum Headless {
                     throw SetupError("The vault has PhotoVault \(installed), newer than \(payload.version). Add --allow-older to install the older version.")
                 }
                 print("PhotoVault Installer \(payload.version): installing on “\(vault.name)”")
-                let report = try VaultSetup.install(into: target, payload: payload, password: password,
+                let report = try VaultSetup.install(into: target, payload: payload, password: password, tagging: tagging,
                                                     mountRoot: mountRoot, progress: say)
                 describe(report)
             }
@@ -136,6 +142,8 @@ enum Headless {
         switch report.joyTag {
         case .installed(let v): print("  JoyTag:     \(v), installed")
         case .alreadyThere(let v): print("  JoyTag:     \(v), there already")
+        case .leftOut: print("  JoyTag:     left out — no photo tagging")
+        case .removed(let v): print("  JoyTag:     \(v), taken off the vault — no photo tagging")
         }
         switch report.tagGroups {
         case .added: print("  Tag groups: added")

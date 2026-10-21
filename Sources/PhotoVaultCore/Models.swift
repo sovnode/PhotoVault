@@ -394,7 +394,7 @@ public enum LibraryScope: Hashable, Sendable {
     case album(Int64)
     case smart(Int64)
     case trash
-    /// The photos directly in one folder (not its subfolders), e.g.
+    /// The photos in one folder and all its subfolders, e.g.
     /// `Photos/2019`.
     case folder(String)
 

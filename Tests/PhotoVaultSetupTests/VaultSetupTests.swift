@@ -56,6 +56,38 @@ struct VaultSetupTests {
         }
     }
 
+    /// Photo tagging unticked: a new vault gets no JoyTag; installing on one
+    /// that has it takes it off — and only it: the catalog, and the tags in
+    /// it, stay as they were. Ticked again, it comes back.
+    @Test func photoTaggingCanBeLeftOutAndTakenOff() throws {
+        let scratch = try Scratch()
+        let payload = try scratch.payload(version: "1.3.0")
+        var steps: [SetupStep] = []
+        let bare = try VaultSetup.create(name: "No Tags", in: scratch.root, size: "100m", payload: payload, tagging: false,
+                                         mountRoot: scratch.mountRoot) { steps.append($0) }
+        #expect(steps == [.creating, .opening, .installingApp, .checking], "no JoyTag step")
+        #expect(bare.joyTag == .leftOut)
+        #expect(!fm.fileExists(atPath: bare.mountPoint.appendingPathComponent(".catalog/models/JoyTag").path))
+        #expect(fm.fileExists(atPath: bare.mountPoint.appendingPathComponent("PhotoVault.app").path))
+
+        let tagged = try VaultSetup.create(name: "Tags", in: scratch.root, size: "100m", payload: payload,
+                                           mountRoot: scratch.mountRoot)
+        let jt = tagged.mountPoint.appendingPathComponent(".catalog/models/JoyTag")
+        #expect(fm.fileExists(atPath: jt.path))
+        // A catalog with tags in it, which must survive.
+        let catalog = tagged.mountPoint.appendingPathComponent(".catalog/catalog.sqlite")
+        try Data("tags live here".utf8).write(to: catalog)
+
+        let off = try VaultSetup.install(into: tagged.mountPoint, payload: payload, tagging: false, mountRoot: scratch.mountRoot)
+        #expect(off.joyTag == .removed("test1"))
+        #expect(!fm.fileExists(atPath: jt.path), "the model is gone, freeing its space")
+        #expect(try Data(contentsOf: catalog) == Data("tags live here".utf8), "the catalog isn't touched")
+
+        let again = try VaultSetup.install(into: tagged.mountPoint, payload: payload, mountRoot: scratch.mountRoot)
+        #expect(again.joyTag == .installed("test1"))
+        #expect(VaultSetup.files(in: jt) == VaultSetup.files(in: payload.joyTag))
+    }
+
     @Test func installingLeavesThePhotosAndTheCatalogAlone() throws {
         let scratch = try Scratch()
         let old = try scratch.payload(version: "1.2.0")

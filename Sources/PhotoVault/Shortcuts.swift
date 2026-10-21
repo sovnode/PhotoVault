@@ -13,7 +13,7 @@ import SwiftUI
 /// menu bar out of step when a shortcut came and went.
 enum Shortcut: CaseIterable {
     // Anywhere
-    case newAlbum, newSmartAlbum
+    case newAlbum, newSmartAlbum, undoMove
     case selectAll, deselectAll
     case rescan, fullRescan, stop, eject
     // Library and albums
@@ -38,6 +38,7 @@ enum Shortcut: CaseIterable {
         switch self {
         case .newAlbum: return "New Album"
         case .newSmartAlbum: return "New Smart Album"
+        case .undoMove: return "Undo Move (photos moved to a folder)"
         case .selectAll: return "Select All"
         case .deselectAll: return "Deselect All"
         case .rescan: return "Rescan Changed Folders"
@@ -70,7 +71,7 @@ enum Shortcut: CaseIterable {
 
     var place: Place {
         switch self {
-        case .newAlbum, .newSmartAlbum, .selectAll, .deselectAll, .rescan, .fullRescan, .stop, .eject: return .anywhere
+        case .newAlbum, .newSmartAlbum, .undoMove, .selectAll, .deselectAll, .rescan, .fullRescan, .stop, .eject: return .anywhere
         case .allMedia, .photosOnly, .videosOnly, .biggerThumbnails, .smallerThumbnails, .wholePhotos,
              .sortUp, .sortDown, .autoScroll, .favorite, .rotateLeft, .rotateRight, .trash: return .library
         case .previous, .next, .back, .properties, .repeatToggle, .playNextToggle: return .viewer
@@ -81,6 +82,7 @@ enum Shortcut: CaseIterable {
     var key: KeyEquivalent {
         switch self {
         case .newAlbum, .newSmartAlbum: return "n"
+        case .undoMove: return "z"
         case .selectAll, .deselectAll: return "a"
         case .rescan, .fullRescan: return "r"
         case .stop: return "."
@@ -177,6 +179,8 @@ struct ShortcutsSheet: View {
                         }
                     }
                     Text("In the library and albums, with one photo picked, ← → ↑ ↓ pick the photo beside, above or below it, and ⇧ on its own opens it. In the viewer, ⇧ goes back to the library, as Esc does.")
+                        .font(.callout).foregroundStyle(.secondary)
+                    Text("Drag photos onto a folder in the sidebar to move them there, or onto an album to add them to it.")
                         .font(.callout).foregroundStyle(.secondary)
                     Text("Pinch zooms a photo or video; two fingers move it about while zoomed.")
                         .font(.callout).foregroundStyle(.secondary)

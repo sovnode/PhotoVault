@@ -117,15 +117,22 @@ struct CatalogV3Tests {
         #expect(backups.contains { $0.hasPrefix("catalog-v2-") })
     }
 
-    @Test func aFolderShowsOnlyItsDirectContentsInNameOrder() throws {
+    @Test func aFolderShowsEverythingBeneathIt() throws {
         let catalog = try Catalog(url: vault.catalogFile)
         defer { catalog.closeCleanly() }
-        for path in ["Photos/2019/IMG_10.jpg", "Photos/2019/IMG_9.jpg", "Photos/2019/summer/IMG_1.jpg", "Photos/top.jpg"] {
+        for path in ["Photos/2019/IMG_10.jpg", "Photos/2019/IMG_9.jpg", "Photos/2019/summer/IMG_1.jpg",
+                     "Photos/2019/summer/clips/IMG_2.mov", "Photos/2019b/IMG_3.jpg", "Photos/2019 trip/IMG_4.jpg",
+                     "Photos/top.jpg", "Photos/50%_off/IMG_5.jpg"] {
             try catalog.upsertPhoto(PhotoItem(relPath: path, mtime: 1))
         }
-        #expect(try catalog.items(scope: .folder("Photos/2019"), filter: .all).map(\.displayName)
-                == ["IMG_9.jpg", "IMG_10.jpg"], "subfolders' photos aren't included; names in natural order")
-        #expect(try catalog.items(scope: .folder("Photos"), filter: .all).map(\.displayName) == ["top.jpg"])
+        func names(_ folder: String) throws -> Set<String> {
+            Set(try catalog.items(scope: .folder(folder), filter: .all).map(\.displayName))
+        }
+        #expect(try names("Photos/2019") == ["IMG_1.jpg", "IMG_2.mov", "IMG_9.jpg", "IMG_10.jpg"],
+                "its subfolders' too, at any depth, but not a neighbour whose name starts the same")
+        #expect(try names("Photos/2019/summer") == ["IMG_1.jpg", "IMG_2.mov"])
+        #expect(try names("Photos").count == 8, "the top folder holds everything")
+        #expect(try names("Photos/50%_off") == ["IMG_5.jpg"], "% and _ in a name are just characters")
     }
 
     @Test func nameOrderIsNaturalAndDateOrderPutsUndatedLast() throws {

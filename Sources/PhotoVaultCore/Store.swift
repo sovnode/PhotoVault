@@ -547,35 +547,174 @@ public actor Store {
 
     public struct EmptyTrashResult: Sendable {
         public var deleted: Int
-        public var failures: [String]
+        /// Files macOS wouldn't let go, and why; their rows stay in the Trash.
+        public var problems: [FileProblem]
     }
 
-    /// Permanently deletes every trashed original from the volume, then its row.
+    /// Permanently deletes trashed originals from the volume — all of them, or
+    /// just `ids` (trying again after a problem) — then their rows. With
+    /// `unlocking`, a locked file this account owns is unlocked first.
     ///
     /// File first, row second, one photo at a time: if a delete fails the row
-    /// stays in the Trash and the failure is reported, rather than leaving a
-    /// row-less file that the next scan would quietly bring back. A row whose
-    /// file is already gone is simply removed.
+    /// stays in the Trash and the problem is reported, with why, rather than
+    /// leaving a row-less file that the next scan would quietly bring back. A
+    /// row whose file is already gone is simply removed.
     ///
     /// The thumbnail bytes stay in the pack (it is append-only) and stop being
     /// reachable. Note too that a sparse bundle doesn't shrink when files are
     /// deleted; `hdiutil compact` reclaims the space.
-    public func emptyTrash() throws -> EmptyTrashResult {
-        var result = EmptyTrashResult(deleted: 0, failures: [])
+    public func emptyTrash(ids: [Int64]? = nil, unlocking: Bool = false) throws -> EmptyTrashResult {
+        var result = EmptyTrashResult(deleted: 0, problems: [])
         let fm = FileManager.default
-        for item in try catalog.trashedPhotos() {
+        let only = ids.map(Set.init)
+        for item in try catalog.trashedPhotos() where only?.contains(item.id) ?? true {
             let url = root.appendingPathComponent(item.relPath)
             do {
                 if fm.fileExists(atPath: url.path) {
+                    if unlocking, FileCheck.blocker(removing: url) == .locked { try FileCheck.unlock(url) }
                     try fm.removeItem(at: url)
                 }
                 try catalog.deleteRow(id: item.id)
                 result.deleted += 1
             } catch {
-                result.failures.append("\(item.relPath): \(error.localizedDescription)")
+                let reason = FileCheck.reason(for: error, removing: url)
+                result.problems.append(FileProblem(id: item.id, relPath: item.relPath, reason: reason,
+                                                   detail: reason == .other ? error.localizedDescription : ""))
             }
         }
         return result
+    }
+
+    /// The trashed files macOS wouldn't let Empty Trash delete, and why —
+    /// checked before anything is deleted, so the question can say so.
+    public func trashProblems() throws -> [FileProblem] {
+        try catalog.trashedPhotos().compactMap { item in
+            let url = root.appendingPathComponent(item.relPath)
+            return FileCheck.blocker(removing: url).map { FileProblem(id: item.id, relPath: item.relPath, reason: $0) }
+        }
+    }
+
+    /// The full paths of photos `ids`, for an administrator's delete or move:
+    /// only files inside the Photos folder, with nothing in the path that
+    /// leads out of it.
+    public func photoPaths(_ ids: [Int64]) throws -> [Int64: String] {
+        var out: [Int64: String] = [:]
+        for id in ids {
+            guard let item = try catalog.photo(id: id),
+                  MovePlanning.isInsidePhotos(PhotoItem.folder(of: item.relPath)) else { continue }
+            out[id] = root.appendingPathComponent(item.relPath).path
+        }
+        return out
+    }
+
+    /// After an administrator's delete: the rows of trashed photos whose files
+    /// have gone are removed. Returns how many.
+    public func forgetDeletedTrash(_ ids: [Int64]) throws -> Int {
+        var n = 0
+        for id in ids {
+            guard let item = try catalog.photo(id: id), item.trashed,
+                  !FileManager.default.fileExists(atPath: root.appendingPathComponent(item.relPath).path) else { continue }
+            try catalog.deleteRow(id: id)
+            n += 1
+        }
+        return n
+    }
+
+    // MARK: - Moving files
+
+    /// Moves photos' files into `folder` (the Photos folder or one inside it,
+    /// made if it isn't there), each keeping its name unless the folder has
+    /// one like it — then "name 2.jpg", as Finder does. Each row follows its
+    /// file in the same step, so favorites, albums, tags, thumbnail and place
+    /// all stay: nothing is scanned, thumbnailed or tagged again.
+    ///
+    /// A rename on the vault's own volume: instant, and the disk image doesn't
+    /// grow. One file at a time, so stopping (the task cancelled) leaves each
+    /// file in one place or the other with its row agreeing.
+    public func move(_ ids: [Int64], toFolder folder: String, unlocking: Bool = false,
+                     progress: (@Sendable (ScanProgress) -> Void)? = nil) async throws -> MoveResult {
+        guard MovePlanning.isInsidePhotos(folder) else {
+            throw VaultError.cannotDelete("\(folder) isn't a folder in this vault's Photos folder.")
+        }
+        let plan = ids.map { (id: $0, folder: folder, name: String?.none) }
+        return try await relocate(plan, unlocking: unlocking, progress: progress)
+    }
+
+    /// Moves each photo back to where `records` say it came from — Undo.
+    public func moveBack(_ records: [MoveRecord], progress: (@Sendable (ScanProgress) -> Void)? = nil) async throws -> MoveResult {
+        let plan = records.map { (id: $0.id, folder: PhotoItem.folder(of: $0.from), name: Optional(($0.from as NSString).lastPathComponent)) }
+        return try await relocate(plan, unlocking: false, progress: progress)
+    }
+
+    private func relocate(_ plan: [(id: Int64, folder: String, name: String?)], unlocking: Bool,
+                          progress: (@Sendable (ScanProgress) -> Void)?) async throws -> MoveResult {
+        var result = MoveResult()
+        let fm = FileManager.default
+        for (n, step) in plan.enumerated() {
+            try Task.checkCancellation()
+            if n % 25 == 0 { progress?(ScanProgress(phase: "Moving…", done: n, total: plan.count)) }
+            guard MovePlanning.isInsidePhotos(step.folder),
+                  let item = try catalog.photo(id: step.id), !item.trashed, !item.missing else { continue }
+            if PhotoItem.folder(of: item.relPath) == step.folder, step.name == nil || step.name == item.displayName {
+                result.alreadyThere += 1
+                continue
+            }
+            let source = root.appendingPathComponent(item.relPath)
+            let dir = root.appendingPathComponent(step.folder, isDirectory: true)
+            do {
+                if !fm.fileExists(atPath: dir.path) { try fm.createDirectory(at: dir, withIntermediateDirectories: true) }
+                let name = MovePlanning.freeName(step.name ?? item.displayName, in: step.folder) { rel in
+                    fm.fileExists(atPath: self.root.appendingPathComponent(rel).path)
+                        || ((try? self.catalog.photoID(relPath: rel)) ?? nil) != nil
+                }
+                let newRel = step.folder + "/" + name
+                if unlocking, FileCheck.blocker(removing: source) == .locked { try FileCheck.unlock(source) }
+                try fm.moveItem(at: source, to: root.appendingPathComponent(newRel))
+                try catalog.relink(missingID: item.id, toRelPath: newRel)
+                result.moved.append(MoveRecord(id: item.id, from: item.relPath, to: newRel))
+            } catch {
+                let reason = FileCheck.reason(for: error, removing: source, into: dir)
+                result.problems.append(FileProblem(id: item.id, relPath: item.relPath, reason: reason,
+                                                   detail: reason == .other ? error.localizedDescription : ""))
+            }
+        }
+        progress?(ScanProgress(phase: "Moving…", done: plan.count, total: plan.count, finished: true))
+        return result
+    }
+
+    /// Where an administrator's move of `ids` into `folder` would put each
+    /// file: full paths, with free names worked out now.
+    public func administratorMovePlan(_ ids: [Int64], toFolder folder: String) throws -> [(id: Int64, from: String, to: String)] {
+        guard MovePlanning.isInsidePhotos(folder) else { return [] }
+        let fm = FileManager.default
+        var claimed: Set<String> = []
+        var out: [(id: Int64, from: String, to: String)] = []
+        for id in ids {
+            guard let item = try catalog.photo(id: id), !item.trashed, !item.missing,
+                  MovePlanning.isInsidePhotos(PhotoItem.folder(of: item.relPath)) else { continue }
+            let name = MovePlanning.freeName(item.displayName, in: folder) { rel in
+                claimed.contains(rel) || fm.fileExists(atPath: self.root.appendingPathComponent(rel).path)
+                    || ((try? self.catalog.photoID(relPath: rel)) ?? nil) != nil
+            }
+            claimed.insert(folder + "/" + name)
+            out.append((id, root.appendingPathComponent(item.relPath).path, root.appendingPathComponent(folder + "/" + name).path))
+        }
+        return out
+    }
+
+    /// After an administrator's move: each row whose file is now at its new
+    /// path, and gone from the old, follows it.
+    public func adoptMoved(_ plan: [(id: Int64, from: String, to: String)]) throws -> [MoveRecord] {
+        let fm = FileManager.default
+        let prefix = root.path + "/"
+        var records: [MoveRecord] = []
+        for step in plan where fm.fileExists(atPath: step.to) && !fm.fileExists(atPath: step.from) {
+            guard step.to.hasPrefix(prefix), step.from.hasPrefix(prefix) else { continue }
+            let newRel = String(step.to.dropFirst(prefix.count)), oldRel = String(step.from.dropFirst(prefix.count))
+            try catalog.relink(missingID: step.id, toRelPath: newRel)
+            records.append(MoveRecord(id: step.id, from: oldRel, to: newRel))
+        }
+        return records
     }
 
     // MARK: - Rotation

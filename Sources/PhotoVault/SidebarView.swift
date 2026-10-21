@@ -14,6 +14,8 @@ private struct Reorderable: ViewModifier {
     /// A row only takes a drag of its own kind.
     let kind: String
     @Binding var target: SidebarView.DropTarget?
+    /// Photos dropped on the row (albums only): added to it.
+    var addPhotos: (@MainActor ([Int64]) -> Void)? = nil
     let move: (_ dragged: Int64, _ after: Bool) -> Void
     @State private var height: CGFloat = 22
 
@@ -32,13 +34,20 @@ private struct Reorderable: ViewModifier {
             // The list's own way to drag a row. `.onDrag` took the mouse-down
             // for itself, so clicking an album no longer selected it.
             .itemProvider { NSItemProvider(object: "\(kind):\(id)" as NSString) }
-            .onDrop(of: [.plainText, .utf8PlainText, .text],
-                    delegate: RowDrop(scope: scope, kind: kind, id: id, height: height, target: $target, move: move))
+            .onDrop(of: [.plainText, .utf8PlainText, .text, .photoIDs],
+                    delegate: RowDrop(scope: scope, kind: kind, id: id, height: height, target: $target,
+                                      addPhotos: addPhotos, move: move))
             .overlay(alignment: target?.after == true ? .bottom : .top) {
-                if target?.scope == scope {
+                if target?.scope == scope, target?.photos == false {
                     Rectangle().fill(Color.accentColor).frame(height: 2).allowsHitTesting(false)
                 }
             }
+            .background(
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color.accentColor.opacity(target?.scope == scope && target?.photos == true ? 0.3 : 0))
+                    .padding(.horizontal, -6)
+                    .allowsHitTesting(false)
+            )
     }
 
     static func parse(_ text: String, kind: String) -> Int64? {
@@ -54,18 +63,26 @@ private struct RowDrop: DropDelegate {
     let id: Int64
     let height: CGFloat
     @Binding var target: SidebarView.DropTarget?
+    let addPhotos: (@MainActor ([Int64]) -> Void)?
     let move: (_ dragged: Int64, _ after: Bool) -> Void
 
     private func after(_ info: DropInfo) -> Bool { info.location.y > height / 2 }
+    private func photos(_ info: DropInfo) -> Bool { info.hasItemsConforming(to: [.photoIDs]) }
 
-    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.text]) }
+    func validateDrop(info: DropInfo) -> Bool {
+        photos(info) ? addPhotos != nil : info.hasItemsConforming(to: [.text])
+    }
 
-    func dropEntered(info: DropInfo) { target = SidebarView.DropTarget(scope: scope, after: after(info)) }
+    func dropEntered(info: DropInfo) {
+        guard validateDrop(info: info) else { return }
+        target = SidebarView.DropTarget(scope: scope, after: after(info), photos: photos(info))
+    }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        let now = SidebarView.DropTarget(scope: scope, after: after(info))
+        guard validateDrop(info: info) else { return DropProposal(operation: .forbidden) }
+        let now = SidebarView.DropTarget(scope: scope, after: after(info), photos: photos(info))
         if target != now { target = now }
-        return DropProposal(operation: .move)
+        return DropProposal(operation: photos(info) ? .copy : .move)
     }
 
     func dropExited(info: DropInfo) {
@@ -75,6 +92,10 @@ private struct RowDrop: DropDelegate {
     func performDrop(info: DropInfo) -> Bool {
         let below = after(info)
         target = nil
+        if photos(info) {
+            guard let addPhotos else { return false }
+            return PhotoDrag.load(info.itemProviders(for: [.photoIDs]), then: addPhotos)
+        }
         guard let provider = info.itemProviders(for: [.text]).first else { return false }
         _ = provider.loadObject(ofClass: NSString.self) { object, _ in
             guard let text = object as? String,
@@ -102,6 +123,8 @@ struct SidebarView: View {
     struct DropTarget: Equatable {
         let scope: LibraryScope
         let after: Bool
+        /// Photos from the grid, rather than an album being reordered.
+        var photos = false
     }
 
     var body: some View {
@@ -109,20 +132,24 @@ struct SidebarView: View {
             Section("Library") {
                 // All Media is the root of the folder tree: it expands into the
                 // folders under Photos/, nested as deep as they go. Choosing a
-                // folder shows only the photos directly in it.
+                // folder shows the photos in it and in every folder beneath it.
                 if let tree = model.folderTree {
                     OutlineGroup([tree], children: \.children) { node in
                         if node.id == tree.id {
                             Label("All Media", systemImage: "photo.on.rectangle")
                                 .badge(model.totalCount)
                                 .tag(LibraryScope.all)
+                                // Photos dropped here go to the top of the
+                                // Photos folder.
+                                .modifier(PhotoDropTarget { ids in model.dropPhotos(ids, onFolder: node.id) })
                         } else {
                             Label(node.name, systemImage: "folder")
-                                .badge(node.directCount)
+                                .badge(node.totalCount)
                                 .tag(LibraryScope.folder(node.id))
+                                .modifier(PhotoDropTarget { ids in model.dropPhotos(ids, onFolder: node.id) })
                                 .help(node.directCount == node.totalCount
-                                      ? "\(node.directCount) photos"
-                                      : "\(node.directCount) photos here, \(node.totalCount) including subfolders")
+                                      ? "\(node.totalCount) photos"
+                                      : "\(node.totalCount) photos, \(node.directCount) of them directly in this folder")
                         }
                     }
                 } else {
@@ -143,7 +170,8 @@ struct SidebarView: View {
                         Label(album.name, systemImage: "rectangle.stack")
                             .badge(model.albumCounts[album.id] ?? 0)
                             .tag(LibraryScope.album(album.id))
-                            .modifier(Reorderable(scope: .album(album.id), kind: Self.albumDrag, target: $dropTarget) { dragged, after in
+                            .modifier(Reorderable(scope: .album(album.id), kind: Self.albumDrag, target: $dropTarget,
+                                                  addPhotos: { ids in model.dropPhotos(ids, onAlbum: album.id) }) { dragged, after in
                                 model.moveAlbum(dragged, beside: album.id, after: after)
                             })
                     }
@@ -224,7 +252,7 @@ struct SidebarView: View {
         if items.count == 1, let only = items.first {
             switch only {
             case .trash:
-                Button("Empty Trash…") { model.confirmingEmptyTrash = true }
+                Button("Empty Trash…") { model.askEmptyTrash() }
                     .disabled(model.trashCount == 0)
             case .album(let id):
                 if let album = model.albums.first(where: { $0.id == id }) {

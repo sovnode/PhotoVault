@@ -494,6 +494,32 @@ KEYS
 fi
 if stop_app; then pass "quit promptly"; else fail "quit promptly"; fi
 
+# ------------------------------------------------------------------ moving files, and files that won't go
+
+echo "Moving photos into folders, and a file Empty Trash can't delete"
+MARK=$(wc -l < "$WORK/app.log" | tr -d ' ')
+launch PHOTOVAULT_SMOKE_FILES=1
+t=0
+while ! tail -n +$((MARK + 1)) "$WORK/app.log" | grep -q "smoke: files and the status line\|smoke: files: "; do
+    [ "$t" -ge 120 ] && break
+    sleep 1; t=$((t + 1))
+done
+FILES="$(tail -n +$((MARK + 1)) "$WORK/app.log" | sed -n 's/^smoke: files //p')"
+if [ -z "$FILES" ]; then
+    fail "moving and deleting were tried (no report)"
+else
+    while IFS= read -r line; do
+        case "$line" in
+            *": yes") pass "${line%: yes}" ;;
+            *) fail "$line" ;;
+        esac
+    done <<FILESLOG
+$FILES
+FILESLOG
+fi
+if stop_app; then pass "quit promptly"; else fail "quit promptly"; fi
+expect "nothing is left locked in the vault" "$(find "$MOUNT/Photos" -flags uchg | wc -l | tr -d ' ')" "0"
+
 # ------------------------------------------------------------------ opening where it was left
 
 echo "Opening where it was left: a folder, only photos, a photo open"

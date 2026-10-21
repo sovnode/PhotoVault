@@ -39,6 +39,10 @@ final class InstallerModel: ObservableObject {
     @Published var mode: Mode = .create
     @Published var phase: Phase = .choosing
 
+    /// Photo tagging (JoyTag) goes on the vault. Unticked, the vault is
+    /// smaller by the model's size — and an existing vault's copy comes off.
+    @Published var tagging = true
+
     // A new vault
     @Published var name = "PhotoVault"
     @Published var folder = FileManager.default.homeDirectoryForCurrentUser
@@ -289,6 +293,7 @@ final class InstallerModel: ObservableObject {
 
     func start() {
         guard canStart, let payload else { return }
+        let tagging = tagging
         var plan: [SetupStep]
         let failure: String
         let work: ((SetupStep) -> Void) throws -> SetupReport
@@ -304,7 +309,8 @@ final class InstallerModel: ObservableObject {
             failure = "The vault couldn't be created"
             plan = [.creating, .opening, .installingApp]
             work = { progress in
-                try VaultSetup.create(name: name, in: folder, size: size, payload: payload, password: password, progress: progress)
+                try VaultSetup.create(name: name, in: folder, size: size, payload: payload, password: password,
+                                      tagging: tagging, progress: progress)
             }
         case .install:
             guard let vault = chosen else { return }
@@ -315,10 +321,10 @@ final class InstallerModel: ObservableObject {
             failure = "PhotoVault couldn't be installed"
             plan = (now.photoVaultIsOpen ? [.quitting] : []) + [.installingApp]
             work = { progress in
-                try VaultSetup.install(into: target, payload: payload, progress: progress)
+                try VaultSetup.install(into: target, payload: payload, tagging: tagging, progress: progress)
             }
         }
-        plan += [.installingJoyTag, .checking]
+        plan += (tagging ? [.installingJoyTag] : []) + [.checking]
         steps = plan.map { Step(step: $0) }
         phase = .working
         setCloseButtonEnabled(false)
@@ -362,6 +368,23 @@ final class InstallerModel: ObservableObject {
 
     // MARK: - Done
 
+    /// JoyTag's size, as people read it: "370 MB".
+    var tagSize: String { ByteCountFormatter.string(fromByteCount: joyTagBytes, countStyle: .file) }
+
+    /// What the Photo tagging box means, under it.
+    func taggingNote(for vault: ExistingVault?) -> (text: String, warning: Bool) {
+        if tagging {
+            if let vault, vault.joyTagVersion != nil {
+                return ("JoyTag names what's in each photo, for smart albums. It's on this vault already.", false)
+            }
+            return ("JoyTag names what's in each photo, for smart albums. It takes \(tagSize) on the vault.", false)
+        }
+        if let vault, vault.joyTagVersion != nil {
+            return ("JoyTag will be taken off this vault, freeing \(tagSize). PhotoVault won't tag new photos; tags it already made are kept. Install again with this ticked to bring it back.", true)
+        }
+        return ("Saves \(tagSize). PhotoVault won't tag photos, so smart albums can't pick photos by what's in them. Install again with this ticked to add it later.", true)
+    }
+
     func doneTitle(_ report: SetupReport) -> String {
         if report.createdImage != nil { return "“\(report.mountPoint.lastPathComponent)” is ready" }
         return "PhotoVault \(report.version) is on “\(report.mountPoint.lastPathComponent)”"
@@ -386,6 +409,9 @@ final class InstallerModel: ObservableObject {
             lines.append("Its Tag Groups.txt is hidden now, as .Tag Groups.txt. To edit it, show hidden files in Finder: press ⇧⌘ and the full stop key.")
         }
         if report.quitPhotoVault { lines.append("PhotoVault was quit to install. Open it again to carry on.") }
+        if case .removed = report.joyTag {
+            lines.append("Photo tagging was taken off the vault, freeing \(tagSize). Tags it already made are kept, and smart albums using them still work.")
+        }
         lines.append("Its photos, albums and tags are as they were.")
         return lines
     }

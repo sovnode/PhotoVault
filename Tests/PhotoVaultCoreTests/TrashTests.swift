@@ -78,7 +78,7 @@ struct TrashTests {
         let result = try await store.emptyTrash()
 
         #expect(result.deleted == 2)
-        #expect(result.failures.isEmpty)
+        #expect(result.problems.isEmpty)
         #expect(!FileManager.default.fileExists(atPath: vault.photos.appendingPathComponent("a.jpg").path))
         #expect(!FileManager.default.fileExists(atPath: vault.photos.appendingPathComponent("2019/c.jpg").path))
         #expect(FileManager.default.fileExists(atPath: vault.photos.appendingPathComponent("b.jpg").path),
@@ -98,7 +98,7 @@ struct TrashTests {
 
         let result = try await store.emptyTrash()
         #expect(result.deleted == 1)
-        #expect(result.failures.isEmpty)
+        #expect(result.problems.isEmpty)
         #expect(try await store.trashCount() == 0)
         await store.close()
     }
@@ -115,7 +115,7 @@ struct TrashTests {
         let result = try await store.emptyTrash()
 
         #expect(result.deleted == 0)
-        #expect(result.failures.count == 1)
+        #expect(result.problems.count == 1)
         #expect(try await store.trashCount() == 1)
         #expect(FileManager.default.fileExists(atPath: folder.appendingPathComponent("a.jpg").path))
         await store.close()

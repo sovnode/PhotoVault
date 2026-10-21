@@ -51,6 +51,11 @@ public struct SetupReport: Sendable, Equatable {
         case installed(String)
         /// This version was there already, complete.
         case alreadyThere(String)
+        /// Photo tagging was left out, as asked: none was there.
+        case leftOut
+        /// Photo tagging was left out, as asked, and the copy there — this
+        /// version — was taken off the vault to free its space.
+        case removed(String)
     }
     public enum TagGroups: Sendable, Equatable {
         case added, renamed, kept
@@ -118,7 +123,10 @@ public enum VaultSetup {
     @discardableResult
     /// With a `password`, the vault is encrypted: nobody can open it without
     /// the password, and nothing can recover it if it's forgotten.
+    /// With `tagging` false, JoyTag is left off the vault: it's smaller by
+    /// the model's size, and PhotoVault doesn't tag photos.
     public static func create(name: String, in folder: URL, size: String, payload: Payload, password: String? = nil,
+                              tagging: Bool = true,
                               mountRoot: URL? = nil, progress: (SetupStep) -> Void = { _ in }) throws -> SetupReport {
         let name = name.trimmingCharacters(in: .whitespaces)
         if let problem = problem(withName: name) { throw SetupError(problem) }
@@ -141,7 +149,7 @@ public enum VaultSetup {
 
         progress(.installingApp)
         let groups = try installApp(at: mount, payload: payload)
-        let joyTag = try installJoyTag(payload.joyTag, at: mount, progress: progress)
+        let joyTag = tagging ? try installJoyTag(payload.joyTag, at: mount, progress: progress) : .leftOut
         progress(.checking)
         try checkSignature(at: mount)
         return SetupReport(mountPoint: mount, createdImage: bundle, version: payload.version, replacedVersion: nil,
@@ -200,7 +208,10 @@ public enum VaultSetup {
     /// Puts PhotoVault on an existing vault — its disk image, or the vault
     /// itself — mounting it if needed and quitting a PhotoVault open from it.
     @discardableResult
-    public static func install(into target: URL, payload: Payload, password: String? = nil, mountRoot: URL? = nil,
+    /// With `tagging` false, JoyTag is left off — and taken off a vault that
+    /// has it, freeing its space. The tags it made stay in the catalog.
+    public static func install(into target: URL, payload: Payload, password: String? = nil, tagging: Bool = true,
+                               mountRoot: URL? = nil,
                                progress: (SetupStep) -> Void = { _ in }) throws -> SetupReport {
         if DiskImages.isDiskImage(target), DiskImages.mountPoint(of: target) == nil { progress(.opening) }
         let mount = try open(target, mountRoot: mountRoot, password: password).vault.mountPoint
@@ -225,7 +236,7 @@ public enum VaultSetup {
         let before = catalogFiles(in: mount)
         progress(.installingApp)
         let groups = try installApp(at: mount, payload: payload)
-        let joyTag = try installJoyTag(payload.joyTag, at: mount, progress: progress)
+        let joyTag = tagging ? try installJoyTag(payload.joyTag, at: mount, progress: progress) : try removeJoyTag(at: mount)
         progress(.checking)
         try checkSignature(at: mount)
         guard catalogFiles(in: mount) == before else {
@@ -297,6 +308,23 @@ public enum VaultSetup {
     /// version gets only the files it's missing — its licence, if it was set
     /// up before the licence shipped — rather than the whole model again,
     /// which would grow its disk image by as much.
+    /// Takes JoyTag off the vault — the model only; the tags it made are in
+    /// the catalog and stay.
+    static func removeJoyTag(at mount: URL) throws -> SetupReport.JoyTag {
+        let models = mount.appendingPathComponent(".catalog/models")
+        let dest = models.appendingPathComponent("JoyTag")
+        let fm = FileManager.default
+        for leftover in [".JoyTag-incoming", ".JoyTag-outgoing"] {
+            try? fm.removeItem(at: models.appendingPathComponent(leftover))
+        }
+        guard fm.fileExists(atPath: dest.path) else { return .leftOut }
+        let version = joyTagVersion(in: mount) ?? "?"
+        do { try fm.removeItem(at: dest) } catch {
+            throw SetupError("JoyTag couldn't be taken off the vault: \(error.localizedDescription)")
+        }
+        return .removed(version)
+    }
+
     static func installJoyTag(_ package: URL, at mount: URL, progress: (SetupStep) -> Void) throws -> SetupReport.JoyTag {
         progress(.installingJoyTag)
         let fm = FileManager.default

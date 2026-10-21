@@ -206,7 +206,7 @@ final class LibraryModel: ObservableObject {
     /// until PhotoVault next opens. Tag Untagged Photos still works.
     private var taggingDeclined = false
 
-    enum Job: Equatable { case scan, tagging, retagging }
+    enum Job: Equatable { case scan, tagging, retagging, moving }
 
     struct TaggingQuestion: Identifiable {
         let id = UUID()
@@ -642,6 +642,8 @@ final class LibraryModel: ObservableObject {
                 await self.checkPlacesForSmokeTest()
                 await self.checkPlaybackForSmokeTest()
                 await self.checkKeysForSmokeTest()
+                await self.checkFilesForSmokeTest()
+                self.showSheetForSmokeTest()
                 await self.leaveForSmokeTest()
                 await self.timeSwitchingForSmokeTest()
                 await self.considerTagging()
@@ -666,7 +668,11 @@ final class LibraryModel: ObservableObject {
     /// What the running scan is doing, for the quit and eject questions.
     var scanDescription: String {
         guard let p = scanProgress else {
-            return job == .scan ? "PhotoVault is checking the vault for changes." : "PhotoVault is loading JoyTag."
+            switch job {
+            case .scan: return "PhotoVault is checking the vault for changes."
+            case .moving: return "PhotoVault is moving photos."
+            case .tagging, .retagging: return "PhotoVault is loading JoyTag."
+            }
         }
         let text = Self.describe(p)
         return "PhotoVault is \(text.prefix(1).lowercased() + text.dropFirst())."
@@ -684,7 +690,15 @@ final class LibraryModel: ObservableObject {
         case .retagging:
             return ("PhotoVault is still re-tagging photos",
                     scanDescription + " If you stop now, the photos already re-tagged keep their new tags and the rest keep their old ones.")
+        case .moving:
+            return ("PhotoVault is still moving photos",
+                    scanDescription + " If you stop now, the photos already moved stay in their new folder and the rest stay where they were.")
         }
+    }
+
+    /// "1 item", "1,234 items".
+    static func itemCount(_ n: Int) -> String {
+        n == 1 ? "1 item" : "\(NumberFormatter.localizedString(from: NSNumber(value: n), number: .decimal)) items"
     }
 
     private static func describe(_ p: ScanProgress) -> String {
@@ -846,6 +860,188 @@ final class LibraryModel: ObservableObject {
         viewing = nil
         print("smoke: closing the viewer ended the slideshow: \(!slideshowOn && displayAwake == 0 ? "yes" : "no")")
         fflush(stdout)
+    }
+
+    /// Hook for `Scripts/smoke-test.sh`: moves photos into another folder and
+    /// back (Undo), drops them on a folder and an album as a drag from the
+    /// grid would, and empties the Trash with a locked file in it — reporting
+    /// what each did. `PHOTOVAULT_SMOKE_FILES=1`; inert otherwise.
+    private var smokeFilesChecked = false
+    /// Set when the grid hands out a drag, for the smoke test.
+    var smokeDragStarted = false
+    private func checkFilesForSmokeTest() async {
+        guard !smokeFilesChecked, ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_FILES"] == "1",
+              let store, let root, scope == .all, viewing == nil else { return }
+        smokeFilesChecked = true
+        func wait(_ seconds: Double = 0.5) async { try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000)) }
+        func settle() async { for _ in 0..<60 where scanning { await wait(0.25) }; await wait(0.5) }
+        func report(_ what: String, _ ok: Bool) { print("smoke: files \(what): \(ok ? "yes" : "no")"); fflush(stdout) }
+        func onDisk(_ rel: String) -> Bool { FileManager.default.fileExists(atPath: root.appendingPathComponent(rel).path) }
+
+        let photos = items.filter { $0.mediaType == .photo }
+        guard photos.count >= 4 else { return print("smoke: files: too few photos") }
+
+        // A real click on the grid's first cell selects it — the drag added
+        // to the cells mustn't take clicks — and a press-and-move starts a drag.
+        func scrollViews(in view: NSView) -> [NSScrollView] {
+            (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap(scrollViews(in:))
+        }
+        if let window = Self.typingWindow, let grid = window.contentView.flatMap(scrollViews(in:))?
+            .max(by: { ($0.documentView?.frame.height ?? 0) < ($1.documentView?.frame.height ?? 0) }) {
+            clearSelection()
+            await wait(0.5)
+            let topLeft = grid.convert(NSPoint(x: grid.bounds.minX, y: grid.bounds.minY), to: nil)
+            // Flipped or not, the first cell is 8 points in from the top-left.
+            let y = grid.isFlipped ? topLeft.y - 40 : grid.convert(NSPoint(x: 0, y: grid.bounds.maxY), to: nil).y - 40
+            let point = NSPoint(x: topLeft.x + 40, y: y)
+            func mouse(_ type: NSEvent.EventType, _ at: NSPoint) {
+                if let e = NSEvent.mouseEvent(with: type, location: at, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                              windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                                              pressure: type == .leftMouseUp ? 0 : 1) { NSApp.sendEvent(e) }
+            }
+            // The release goes in the queue first: a press on a cell that can
+            // be dragged waits for it in a loop of its own.
+            if let up = NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                           windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 0) {
+                NSApp.postEvent(up, atStart: false)
+            }
+            mouse(.leftMouseDown, point)
+            await wait(0.8)
+            report("a click on a photo in the grid still selects it (\(selection.count) selected)", selection.count == 1)
+            // Press, move and release, queued the same way: a drag starts.
+            // Only on request (`PHOTOVAULT_SMOKE_DRAG=1`): the drag it starts
+            // is the system's, waiting for a real release, and until then the
+            // app can't quit — fine to look at, not for the full run.
+            if ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_DRAG"] == "1" {
+            let far = NSPoint(x: point.x + 60, y: point.y - 60)
+            for (type, at) in [(NSEvent.EventType.leftMouseDragged, NSPoint(x: point.x + 10, y: point.y - 10)),
+                               (.leftMouseDragged, NSPoint(x: point.x + 30, y: point.y - 30)),
+                               (.leftMouseDragged, far), (.leftMouseUp, far)] {
+                if let e = NSEvent.mouseEvent(with: type, location: at, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                              windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                                              pressure: type == .leftMouseUp ? 0 : 1) {
+                    NSApp.postEvent(e, atStart: false)
+                }
+            }
+            smokeDragStarted = false
+            mouse(.leftMouseDown, point)
+            await wait(1.5)
+            report("pressing and moving on a photo starts a drag", smokeDragStarted)
+            }
+        }
+        let pair = Array(photos.prefix(2)), target = "Photos/Smoke moved"
+        let before = pair.map(\.relPath)
+
+        // Move to Folder › New Folder…, then Undo.
+        moveToNewFolder(named: "Smoke moved", in: VolumeLocator.mediaDirName, photoIDs: pair.map(\.id))
+        await settle()
+        let after = pair.compactMap { p in items.first { $0.id == p.id }?.relPath }
+        report("two photos move into a new folder (\(after))", after.count == 2 && after.allSatisfy { $0.hasPrefix(target + "/") }
+               && after.allSatisfy(onDisk) && !before.contains(where: onDisk))
+        report("the new folder is in the sidebar", folderChoices.contains { $0.path == target })
+        report("Edit › Undo Move is offered", lastMove?.records.count == 2)
+        undoCommand()
+        await settle()
+        let back = pair.compactMap { p in items.first { $0.id == p.id }?.relPath }
+        report("Undo puts them back (\(back))", back == before && before.allSatisfy(onDisk))
+
+        // A drag from the grid: the payload carries ids, and a drop on a
+        // folder moves them there.
+        select(only: pair[0].id)
+        let payload = PhotoDrag.provider(dragIDs(for: pair[0]))
+        let dropped: [Int64] = await withCheckedContinuation { done in
+            _ = PhotoDrag.load([payload]) { done.resume(returning: $0) }
+        }
+        report("a drag carries the photo's id, not its file", dropped == [pair[0].id]
+               && !payload.registeredTypeIdentifiers.contains { $0.contains("url") || $0.contains("jpeg") || $0.contains("image") })
+        dropPhotos(dropped, onFolder: target)
+        await settle()
+        report("dropped on a folder, it moves there", items.first { $0.id == pair[0].id }?.relPath.hasPrefix(target + "/") == true)
+        undoMove()
+        await settle()
+
+        // Dropped on an album, it's added.
+        await newAlbum(named: "Smoke drop", adding: [])
+        if let album = albums.first(where: { $0.name == "Smoke drop" }) {
+            dropPhotos([pair[1].id], onAlbum: album.id)
+            await wait(1)
+            report("dropped on an album, it's added", albumCounts[album.id] == 1)
+            report("and stays where it is", items.first { $0.id == pair[1].id }?.relPath == before[1])
+        }
+
+        // Empty Trash with a locked file: said before, then the sheet, then
+        // Unlock and Delete.
+        let doomed = photos[3]
+        let url = root.appendingPathComponent(doomed.relPath)
+        await moveToTrash([doomed])
+        try? FileManager.default.setAttributes([.immutable: true], ofItemAtPath: url.path)
+        askEmptyTrash()
+        await wait(1)
+        report("Empty Trash says first that a file is locked (\(trashWarning ?? "-"))", confirmingEmptyTrash && trashWarning?.contains("locked") == true)
+        confirmingEmptyTrash = false
+        await emptyTrash()
+        await wait(0.5)
+        report("the locked file gets the sheet, with Unlock and Delete", fileProblems?.problems.map(\.reason) == [.locked]
+               && fileProblems?.anyUnlockable == true && onDisk(doomed.relPath))
+        retryProblems(unlocking: true)
+        await wait(1.5)
+        report("Unlock and Delete deletes it", fileProblems == nil && !onDisk(doomed.relPath) && trashCount == 0)
+
+        // Fix Permissions: a photo carrying a backup's deny rules is found,
+        // said, and fixed.
+        let restored = root.appendingPathComponent(photos[2].relPath)
+        let chmod = Process()
+        chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+        chmod.arguments = ["+a", "group:everyone deny write,delete,append,writeattr,writeextattr,chown", restored.path]
+        try? chmod.run()
+        chmod.waitUntilExit()
+        checkPermissions()
+        for _ in 0..<40 where permissionQuestion == nil { await wait(0.25) }
+        let question = permissionQuestion
+        report("Fix Permissions finds a photo with a backup's rules (\(question?.title ?? "-"))",
+               question?.issues.count == 1 && question?.issues.first?.kinds == [.denyRules])
+        if let question { fixPermissions(question) }
+        for _ in 0..<40 where checkingPermissions { await wait(0.25) }
+        await wait(0.5)
+        report("and fixes it, leaving the photo as it was", PermissionFixer.problems(at: restored.path).isEmpty
+               && permissionQuestion == nil && onDisk(photos[2].relPath))
+
+        // Every folder shows everything beneath it, at any depth, and the
+        // status line counts what this view shows, not the whole vault.
+        var nodes: [FolderNode] = []
+        func walk(_ node: FolderNode) { nodes.append(node); (node.children ?? []).forEach(walk) }
+        folderTree.map(walk)
+        var wrong: [String] = []
+        for node in nodes.dropFirst() {
+            scope = .folder(node.id)
+            await wait(1)
+            if filter != .all { filter = .all; await wait(1) }
+            if items.count != node.totalCount { wrong.append("\(node.name): \(items.count) of \(node.totalCount)") }
+        }
+        report("each of \(nodes.count - 1) folders shows its subfolders' photos too \(wrong)", nodes.count > 2 && wrong.isEmpty)
+        report("and the status line counts the folder, not the vault (\(status))", status == Self.itemCount(items.count))
+        scope = .all
+        await wait(1)
+        _ = store
+    }
+
+    /// For looking at the new windows: `PHOTOVAULT_SMOKE_SHOW=problems` opens
+    /// the file-problems sheet with the first photos as sample entries, one
+    /// per reason; `=newfolder` the New Folder sheet. Inert otherwise.
+    private func showSheetForSmokeTest() {
+        switch ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_SHOW"] {
+        case "problems":
+            let reasons: [FileBlocker] = [.locked, .locked, .folderReadOnly, .lockedNotYours, .other]
+            let sample = zip(items.prefix(reasons.count), reasons).map { item, reason in
+                FileProblem(id: item.id, relPath: item.relPath, reason: reason,
+                            detail: reason == .other ? "The operation couldn't be completed." : "")
+            }
+            fileProblems = FileProblems(action: .delete, problems: sample, doneNote: "12 items were deleted.")
+        case "newfolder":
+            newFolderRequest = NewFolderRequest(photoIDs: items.prefix(3).map(\.id), parent: VolumeLocator.mediaDirName)
+        default:
+            break
+        }
     }
 
     /// Hook for `Scripts/smoke-test.sh`: goes to a folder, shows only photos
@@ -1248,7 +1444,9 @@ final class LibraryModel: ObservableObject {
                 lastShown = shown
                 await restorePlace(of: scope, filter: filter, revealing: revealing)
             }
-            if !scanning { status = "\(totalCount) items" }
+            // What's in this view — this album, folder or filter — not the
+            // whole vault.
+            if !scanning { status = Self.itemCount(items.count) }
             if !smokeFirstItems, !items.isEmpty {
                 smokeFirstItems = true
                 SmokeHooks.mark("first items loaded (\(items.count))")
@@ -1390,6 +1588,12 @@ final class LibraryModel: ObservableObject {
     private func locateTagger(root: URL) {
         guard #available(macOS 15.0, *) else {
             taggerUnavailable = "JoyTag needs macOS 15 or later."
+            return
+        }
+        // Left out at install, to save space: said plainly, with the way back.
+        guard FileManager.default.fileExists(atPath: JoyTagFiles.folder(in: root).path) else {
+            joyTagFiles = nil
+            taggerUnavailable = "Photo tagging isn't installed on this vault. To add it, open PhotoVault Installer and install on this vault with Photo tagging ticked."
             return
         }
         do {
@@ -1941,19 +2145,361 @@ final class LibraryModel: ObservableObject {
 
     /// Permanently deletes every original in the Trash. Only ever called from
     /// the confirmation dialog.
+    // MARK: - Empty Trash, and files macOS won't let go
+
+    /// The files Empty Trash couldn't delete, said before it starts.
+    @Published private(set) var trashWarning: String?
+
+    /// Empty Trash…: checks first which files macOS won't let go, so the
+    /// question can say how many and why, before anything is deleted.
+    func askEmptyTrash() {
+        Task {
+            let problems = (try? await store?.trashProblems()) ?? []
+            trashWarning = Self.warning(for: problems)
+            confirmingEmptyTrash = true
+        }
+    }
+
+    static func warning(for problems: [FileProblem]) -> String? {
+        guard !problems.isEmpty else { return nil }
+        let reasons = Dictionary(grouping: problems, by: \.reason)
+            .sorted { $0.value.count > $1.value.count }
+            .map { "\($0.value.count) \($0.key.title.lowercased())" }
+        let n = problems.count == 1 ? "1 of them" : "\(problems.count) of them"
+        return "\(n) can't be deleted as things are (\(reasons.joined(separator: ", "))). "
+            + "PhotoVault will say what can be done about them once the rest are gone."
+    }
+
+    /// What couldn't be deleted or moved, for the sheet that offers ways
+    /// through.
+    @Published var fileProblems: FileProblems?
+
+    struct FileProblems: Identifiable {
+        enum Action: Equatable {
+            case delete
+            case move(folder: String)
+        }
+        let id = UUID()
+        let action: Action
+        let problems: [FileProblem]
+        /// What did work, to say at the top.
+        let doneNote: String
+
+        var verb: String { action == .delete ? "Delete" : "Move" }
+        var groups: [(reason: FileBlocker, problems: [FileProblem])] {
+            FileBlocker.allCases.compactMap { reason in
+                let these = problems.filter { $0.reason == reason }
+                return these.isEmpty ? nil : (reason, these)
+            }
+        }
+        var anyUnlockable: Bool { problems.contains { $0.reason.unlockable } }
+        var anyNeedsAdministrator: Bool { problems.contains { $0.reason.needsAdministrator || $0.reason == .other } }
+        var readOnly: Bool { problems.allSatisfy { $0.reason == .readOnlyVault } }
+    }
+
     func emptyTrash() async {
+        await emptyTrash(ids: nil, unlocking: false)
+    }
+
+    private func emptyTrash(ids: [Int64]?, unlocking: Bool) async {
         guard let store else { return }
         if viewing?.trashed == true { viewing = nil }    // releases a playing video's file
         do {
-            let result = try await store.emptyTrash()
+            let result = try await store.emptyTrash(ids: ids, unlocking: unlocking)
             await reload()
             status = result.deleted == 1 ? "Deleted 1 item" : "Deleted \(result.deleted) items"
-            if !result.failures.isEmpty {
-                errorMessage = "\(result.failures.count) item(s) couldn't be deleted and are still in the Trash:\n"
-                    + result.failures.prefix(5).joined(separator: "\n")
+            if result.problems.isEmpty {
+                fileProblems = nil
+            } else {
+                fileProblems = FileProblems(action: .delete, problems: result.problems,
+                                            doneNote: result.deleted == 0 ? "" : (result.deleted == 1 ? "1 item was deleted." : "\(result.deleted) items were deleted."))
             }
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    // The problem sheet's buttons.
+
+    /// Tries the same files again — after fixing them in Finder, say.
+    func retryProblems(unlocking: Bool) {
+        guard let sheet = fileProblems else { return }
+        let ids = sheet.problems.map(\.id)
+        fileProblems = nil
+        switch sheet.action {
+        case .delete: Task { await emptyTrash(ids: ids, unlocking: unlocking) }
+        case .move(let folder): startMove(ids: ids, toFolder: folder, unlocking: unlocking)
+        }
+    }
+
+    /// The same files, with an administrator's password: macOS asks for it in
+    /// its own window, and PhotoVault never sees it.
+    func retryProblemsAsAdministrator() {
+        guard let store, let sheet = fileProblems else { return }
+        let ids = sheet.problems.map(\.id)
+        fileProblems = nil
+        status = "Waiting for an administrator's password…"
+        Task {
+            switch sheet.action {
+            case .delete:
+                let paths = (try? await store.photoPaths(ids)) ?? [:]
+                let outcome = await Task.detached(priority: .userInitiated) {
+                    AdministratorFiles.run(paths.values.sorted().map { .delete($0) },
+                                           prompt: "PhotoVault wants to delete \(paths.count == 1 ? "a photo" : "\(paths.count) photos") from its Trash that this account can't.")
+                }.value
+                if case .failed(let why) = outcome { errorMessage = "The files couldn't be deleted: \(why)" }
+                let gone = (try? await store.forgetDeletedTrash(ids)) ?? 0
+                status = gone == 1 ? "Deleted 1 item" : "Deleted \(gone) items"
+                await reload()
+                // Whatever is still there gets the sheet again.
+                if outcome != .cancelled, gone < ids.count {
+                    await emptyTrash(ids: ids, unlocking: false)
+                }
+            case .move(let folder):
+                let plan = (try? await store.administratorMovePlan(ids, toFolder: folder)) ?? []
+                let outcome = await Task.detached(priority: .userInitiated) {
+                    AdministratorFiles.run(plan.map { .move(from: $0.from, to: $0.to) },
+                                           prompt: "PhotoVault wants to move \(plan.count == 1 ? "a photo" : "\(plan.count) photos") that this account can't.")
+                }.value
+                if case .failed(let why) = outcome { errorMessage = "The files couldn't be moved: \(why)" }
+                let records = (try? await store.adoptMoved(plan)) ?? []
+                finishMove(MoveResult(moved: records, problems: []), folder: folder, adding: true)
+                await reload()
+            }
+        }
+    }
+
+    /// Shows the files in Finder — paths only, in list view, as Reveal does.
+    func revealProblems() {
+        guard let sheet = fileProblems, let root else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(sheet.problems.map { root.appendingPathComponent($0.relPath) })
+    }
+
+    // MARK: - Fix Permissions
+
+    /// What Vault › Fix Permissions found, waiting for the answer.
+    @Published var permissionQuestion: PermissionQuestion?
+    @Published private(set) var checkingPermissions = false
+
+    struct PermissionQuestion: Identifiable {
+        let id = UUID()
+        let issues: [PermissionFixer.Issue]
+        /// After fixing: the ones only an administrator can.
+        let needsAdministrator: Bool
+
+        var title: String {
+            if issues.isEmpty { return "Nothing needs fixing" }
+            if needsAdministrator {
+                return issues.count == 1 ? "1 item needs an administrator" : "\(issues.count) items need an administrator"
+            }
+            return issues.count == 1 ? "Fix 1 item's permissions?" : "Fix the permissions of \(issues.count) items?"
+        }
+
+        var message: String {
+            if issues.isEmpty {
+                return "Every photo, video and folder in the vault can be moved and deleted."
+            }
+            let counts = PermissionFixer.Kind.allCases.compactMap { kind -> String? in
+                let n = issues.filter { $0.kinds.contains(kind) }.count
+                return n == 0 ? nil : "\(n) \(kind.label)"
+            }
+            if needsAdministrator {
+                return "They belong to another user (\(counts.joined(separator: ", "))). macOS can make them yours with an administrator's password, which it asks for in its own window; PhotoVault never sees it."
+            }
+            return "These would stop PhotoVault moving or deleting them: \(counts.joined(separator: ", ")). "
+                + "Fixing changes only their permissions — never the photos — so they behave like the rest of your library."
+        }
+    }
+
+    /// Vault › Fix Permissions…: looks through the Photos folder first, then
+    /// says what it found before changing anything.
+    func checkPermissions() {
+        guard let root, !checkingPermissions else { return }
+        checkingPermissions = true
+        status = "Checking permissions…"
+        let photos = VolumeLocator.mediaDir(root)
+        Task {
+            let issues = await Task.detached(priority: .userInitiated) { PermissionFixer.scan(photos) }.value
+            checkingPermissions = false
+            status = Self.itemCount(items.count)
+            permissionQuestion = PermissionQuestion(issues: issues, needsAdministrator: false)
+        }
+    }
+
+    /// Fixes what can be fixed without a password, then asks about the rest.
+    func fixPermissions(_ question: PermissionQuestion) {
+        permissionQuestion = nil
+        if question.needsAdministrator { return fixPermissionsAsAdministrator(question.issues) }
+        checkingPermissions = true
+        status = "Fixing permissions…"
+        Task {
+            let left = await Task.detached(priority: .userInitiated) {
+                question.issues.filter { !PermissionFixer.fix($0) }
+            }.value
+            checkingPermissions = false
+            let fixed = question.issues.count - left.count
+            status = fixed == 1 ? "Fixed 1 item's permissions" : "Fixed the permissions of \(fixed) items"
+            if !left.isEmpty { permissionQuestion = PermissionQuestion(issues: left, needsAdministrator: true) }
+        }
+    }
+
+    private func fixPermissionsAsAdministrator(_ issues: [PermissionFixer.Issue]) {
+        guard let root else { return }
+        let inside = VolumeLocator.mediaDir(root).path
+        let paths = issues.map(\.path).filter { $0 == inside || $0.hasPrefix(inside + "/") }
+        status = "Waiting for an administrator's password…"
+        Task {
+            let outcome = await Task.detached(priority: .userInitiated) {
+                AdministratorFiles.run(command: PermissionFixer.administratorCommand(for: paths),
+                                       prompt: "PhotoVault wants to make \(paths.count == 1 ? "a file" : "\(paths.count) files") in its vault yours, so they can be moved and deleted.")
+            }.value
+            let left = paths.filter { !PermissionFixer.problems(at: $0).isEmpty }.count
+            switch outcome {
+            case .cancelled: status = "Permissions left as they were"
+            case .failed(let why): errorMessage = "The permissions couldn't be fixed: \(why)"
+            case .done: status = left == 0 ? "Fixed the permissions of \(paths.count) items" : "\(left) items still couldn't be fixed"
+            }
+        }
+    }
+
+    // MARK: - Moving photos into folders
+
+    /// The folders under Photos, in the sidebar's order, for the Move to
+    /// Folder menus: each with how deep it is.
+    var folderChoices: [(path: String, name: String, depth: Int)] {
+        guard let tree = folderTree else { return [] }
+        var out: [(String, String, Int)] = []
+        func walk(_ node: FolderNode, _ depth: Int) {
+            out.append((node.id, depth == 0 ? "Photos (All Media)" : node.name, depth))
+            for child in node.children ?? [] { walk(child, depth + 1) }
+        }
+        walk(tree, 0)
+        return out
+    }
+
+    /// The photos a Move command acts on: the one open in the viewer, or the
+    /// grid's selection.
+    var moveTargets: [PhotoItem] {
+        if let open = viewing { return open.trashed ? [] : [open] }
+        return scope == .trash ? [] : selectedItems
+    }
+
+    var canMoveCurrent: Bool { !scanning && !moveTargets.isEmpty }
+
+    /// The last move, for Undo.
+    @Published private(set) var lastMove: (records: [MoveRecord], folder: String)?
+    /// Asking for a new folder's name, for the photos to go into.
+    @Published var newFolderRequest: NewFolderRequest?
+
+    struct NewFolderRequest: Identifiable {
+        let id = UUID()
+        let photoIDs: [Int64]
+        let parent: String
+    }
+
+    func moveToFolder(_ folder: String, items targets: [PhotoItem]) {
+        startMove(ids: targets.map(\.id), toFolder: folder, unlocking: false)
+    }
+
+    func moveToNewFolder(named name: String, in parent: String, photoIDs: [Int64]) {
+        guard MovePlanning.isValidFolderName(name) else { errorMessage = "“\(name)” can't be a folder's name."; return }
+        startMove(ids: photoIDs, toFolder: parent + "/" + name, unlocking: false)
+    }
+
+    /// Photos dropped on a folder in the sidebar.
+    func dropPhotos(_ ids: [Int64], onFolder folder: String) {
+        startMove(ids: ids, toFolder: folder, unlocking: false)
+    }
+
+    /// Photos dropped on an album in the sidebar: added to it.
+    func dropPhotos(_ ids: [Int64], onAlbum albumID: Int64) {
+        guard let store, !ids.isEmpty else { return }
+        Task {
+            try? await store.addToAlbum(albumID, photoIDs: ids)
+            let name = albums.first { $0.id == albumID }?.name ?? "the album"
+            status = ids.count == 1 ? "Added 1 item to \(name)" : "Added \(ids.count) items to \(name)"
+            await reload()
+        }
+    }
+
+    /// The ids a drag from the grid carries: the selection, if the photo
+    /// dragged is in it, or else that photo alone.
+    func dragIDs(for item: PhotoItem) -> [Int64] {
+        selection.contains(item.id) ? order.filter { selection.contains($0) } : [item.id]
+    }
+
+    /// Moving, as a job like tagging: progress in the status line, Stop, and
+    /// the quit question while it runs.
+    private func startMove(ids: [Int64], toFolder folder: String, unlocking: Bool, undoing: [MoveRecord]? = nil) {
+        guard let store, scanTask == nil, !ids.isEmpty else { return }
+        scanning = true
+        job = .moving
+        scanProgress = nil
+        status = "Moving…"
+        let sink = progressSink()
+        scanTask = Task { [weak self] in
+            var result: MoveResult?
+            var stopped = false
+            do {
+                if let undoing {
+                    result = try await store.moveBack(undoing, progress: sink)
+                } else {
+                    result = try await store.move(ids, toFolder: folder, unlocking: unlocking, progress: sink)
+                }
+            } catch is CancellationError {
+                stopped = true
+            } catch {
+                self?.errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            }
+            guard let self else { return }
+            self.scanning = false
+            self.scanProgress = nil
+            self.scanTask = nil
+            await self.reload()
+            if stopped {
+                self.status = "Moving stopped — the photos moved so far are in their new folder"
+                self.lastMove = nil
+            } else if let result {
+                self.finishMove(result, folder: folder, undo: undoing != nil)
+            }
+        }
+    }
+
+    private func finishMove(_ result: MoveResult, folder: String, adding: Bool = false, undo: Bool = false) {
+        let n = result.moved.count
+        let place = folder == VolumeLocator.mediaDirName ? "Photos" : (folder as NSString).lastPathComponent
+        if undo {
+            status = n == 1 ? "Moved 1 item back" : "Moved \(n) items back"
+            lastMove = nil
+        } else if n > 0 {
+            status = n == 1 ? "Moved 1 item to \(place)" : "Moved \(n) items to \(place)"
+            if adding, let last = lastMove, last.folder == folder {
+                lastMove = (last.records + result.moved, folder)
+            } else {
+                lastMove = (result.moved, folder)
+            }
+        } else if result.alreadyThere > 0, result.problems.isEmpty {
+            status = result.alreadyThere == 1 ? "It's in \(place) already" : "They're in \(place) already"
+        }
+        SmokeHooks.say("moved \(n), problems \(result.problems.count), already there \(result.alreadyThere)")
+        if !result.problems.isEmpty {
+            fileProblems = FileProblems(action: .move(folder: folder), problems: result.problems,
+                                        doneNote: n == 0 ? "" : (n == 1 ? "1 item was moved." : "\(n) items were moved."))
+        }
+    }
+
+    /// Edit › Undo Move: the last move, back where each photo came from.
+    func undoMove() {
+        guard let last = lastMove, !last.records.isEmpty else { return }
+        startMove(ids: last.records.map(\.id), toFolder: last.folder, unlocking: false, undoing: last.records)
+    }
+
+    /// ⌘Z: Undo in a text field being typed in, else Undo Move.
+    func undoCommand() {
+        if isEditingText {
+            NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)
+        } else {
+            undoMove()
         }
     }
 

@@ -688,8 +688,12 @@ public final class Catalog {
         case .trash:
             break
         case .folder(let path):
-            clauses.append("p.folder = ?")
-            texts.append(path)
+            // The folder and every folder beneath it. As a range rather than
+            // LIKE: folder names can hold % and _, and the range uses the
+            // index. "/" sorts just before "0", so [path/, path0) is exactly
+            // the paths under it — not a neighbour like "2019b".
+            clauses.append("(p.folder = ? OR (p.folder >= ? AND p.folder < ?))")
+            texts += [path, path + "/", path + "0"]
         }
         // The Trash shows only trashed rows; every other view shows none.
         if case .trash = scope {

@@ -49,7 +49,8 @@ window state in your home folder, and it never connects to the internet.
    click **Open Anyway**. (The app is not notarized by Apple.)
 3. Choose one:
    - **Create a New Vault** — a new disk image, with PhotoVault, JoyTag and an
-     empty Photos folder. Choose its name, where to save it, and the most it can
+     empty Photos folder. (Untick **Include photo tagging** to leave JoyTag
+     out and save about 370 MB; PhotoVault then doesn't tag photos.) Choose its name, where to save it, and the most it can
      hold (it only takes the space its photos use). It can be protected with a
      password: then nobody can open it without one — and a forgotten password
      can't be recovered.

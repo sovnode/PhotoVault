@@ -182,6 +182,21 @@ struct CreateForm: View {
                     Note(text: "Anyone with the disk image can open the vault.")
                 }
             }
+            TaggingRow(vault: nil)
+        }
+    }
+}
+
+/// Photo tagging: on the vault or not.
+struct TaggingRow: View {
+    @EnvironmentObject var model: InstallerModel
+    let vault: ExistingVault?
+
+    var body: some View {
+        FormRow(label: "Tagging:") {
+            Toggle("Include photo tagging (JoyTag)", isOn: $model.tagging)
+            let note = model.taggingNote(for: vault)
+            Note(text: note.text, kind: note.warning ? .warning : .fine)
         }
     }
 }
@@ -210,6 +225,7 @@ struct InstallForm: View {
                     }
                     .padding(.top, 8)
                 }
+                TaggingRow(vault: vault)
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "externaldrive.badge.plus").font(.system(size: 28)).foregroundStyle(.secondary)

@@ -6,6 +6,24 @@ major version changes how vaults are stored.
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-10-21
+
+- **Move photos into folders**: drag them from the grid onto a folder in the
+  sidebar, or use Move to Folder (with New Folder…). The files move on the
+  disk, instantly, keeping their favorites, albums and tags; a name already in
+  the folder is never overwritten. Edit › Undo Move puts them back.
+- **Drag photos onto an album** to add them to it.
+- **A folder shows everything beneath it**, subfolders included, and the
+  count at the top is the view's, not the whole vault's.
+- **When a file can't be deleted or moved**, PhotoVault says why and offers
+  ways through — unlock it, use an administrator's password, show it in
+  Finder — instead of an error.
+- **Vault › Fix Permissions…** clears what stops photos being moved or
+  deleted, such as the rules Time Machine leaves on files restored from a
+  backup.
+- **Photo tagging is optional** in the installer: untick it to leave JoyTag
+  out and save about 370 MB.
+
 ## [1.6.0] — 2026-10-17
 
 - **Scroll automatically**: Play in the grid's toolbar (or Space) scrolls an

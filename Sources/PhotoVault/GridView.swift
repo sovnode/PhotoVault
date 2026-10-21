@@ -60,6 +60,15 @@ struct GridView: View {
                                         model.handleClick(on: item, kind: GridView.clickKind())
                                     }
                                 }
+                                // Dragged onto a folder in the sidebar, the
+                                // photos move there; onto an album, they're
+                                // added. Their ids, never the files. `onDrag`:
+                                // `itemProvider` only drags a List's rows, and
+                                // in the grid nothing moved.
+                                .onDrag {
+                                    model.smokeDragStarted = true
+                                    return model.scope == .trash ? NSItemProvider() : PhotoDrag.provider(model.dragIDs(for: item))
+                                }
                                 .contextMenu { menu(for: item) }
                         }
                     }
@@ -129,9 +138,10 @@ struct GridView: View {
             Button("Empty Trash", role: .destructive) { Task { await model.emptyTrash() } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(model.trashCount == 1
+            Text((model.trashCount == 1
                  ? "The original file for 1 item will be permanently deleted from this vault. This can't be undone."
                  : "The original files for \(model.trashCount) items will be permanently deleted from this vault. This can't be undone.")
+                 + (model.trashWarning.map { "\n\n" + $0 } ?? ""))
         }
     }
 
@@ -259,10 +269,7 @@ struct GridView: View {
             if model.scope == .trash {
                 Text("The Trash is empty").font(.title3)
             } else if case .folder = model.scope {
-                Text("No photos directly in this folder").font(.title3)
-                Text("Its subfolders are listed under it in the sidebar.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                Text("No photos in this folder").font(.title3)
             } else if let album = model.currentSmartAlbum, album.rules != nil {
                 Text("No photos match this filter").font(.title3)
                 if !model.editingFilter {
@@ -318,6 +325,8 @@ struct GridView: View {
             model.retag(targets)
         }
         .disabled(!model.canTag || model.scanning)
+        MoveToFolderMenu(targets: { targets }, title: "Move \(noun) to Folder")
+            .disabled(model.scanning)
         Divider()
         Button("Move \(noun) to Trash") { Task { await model.moveToTrash(targets) } }
             .shortcut(.trash)
@@ -351,7 +360,7 @@ private struct ActivityStatus: View {
 
     var body: some View {
         if model.scanning {
-            if model.job != .scan {
+            if model.job == .tagging || model.job == .retagging {
                 Toggle("Tag faster", isOn: $activity.fast)
                     .toggleStyle(.checkbox)
                     .controlSize(.small)
@@ -381,6 +390,7 @@ private struct ActivityStatus: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .help(model.job == .scan ? "Stops the scan (⌘.); it carries on next time PhotoVault opens."
+                  : model.job == .moving ? "Stops moving (⌘.); the photos moved so far stay in their new folder."
                   : model.job == .tagging ? "Stops tagging (⌘.); it carries on next time PhotoVault opens."
                   : "Stops re-tagging (⌘.); photos already done keep their new tags.")
         } else {

@@ -47,6 +47,13 @@ struct PhotoVaultApp: App {
             // selectAll: to a grid that doesn't implement it. Cut, Copy and
             // Paste are kept for text fields; Copy never puts pixels on the
             // pasteboard, since nothing in the grid answers it.
+            // Undo here is Undo Move; in a text field, the text's own Undo.
+            CommandGroup(replacing: .undoRedo) {
+                Button(model.lastMove != nil ? "Undo Move" : "Undo") { model.undoCommand() }
+                    .shortcut(.undoMove)
+                Button("Redo") { NSApp.sendAction(Selector(("redo:")), to: nil, from: nil) }
+                    .keyboardShortcut("z", modifiers: [.command, .shift])
+            }
             CommandGroup(replacing: .pasteboard) {
                 Button("Cut") { NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: nil) }
                     .keyboardShortcut("x")
@@ -122,6 +129,10 @@ struct PhotoVaultApp: App {
                     .shortcut(.rotateRight)
                     .disabled(!model.canRotateCurrent)
                 Divider()
+                // The menu bar doesn't share the window's environment.
+                MoveToFolderMenu(targets: { model.moveTargets })
+                    .environmentObject(model)
+                    .disabled(!model.canMoveCurrent)
                 Button("Move to Trash") { model.trashCommand() }
                     .shortcut(.trash)
                     .disabled(!model.canTrashCurrent)
@@ -178,12 +189,14 @@ struct PhotoVaultApp: App {
                 Button("Full Rescan") { model.rescan(full: true) }
                     .shortcut(.fullRescan)
                     .disabled(model.scanning)
-                Button(model.job == .scan ? "Stop Scan" : "Stop Tagging") { model.stopScan() }
+                Button(model.job == .scan ? "Stop Scan" : model.job == .moving ? "Stop Moving" : "Stop Tagging") { model.stopScan() }
                     .shortcut(.stop)
                     .disabled(!model.scanning)
                 Divider()
-                Button("Empty Trash…") { model.confirmingEmptyTrash = true }
+                Button("Empty Trash…") { model.askEmptyTrash() }
                     .disabled(model.trashCount == 0)
+                Button("Fix Permissions…") { model.checkPermissions() }
+                    .disabled(model.checkingPermissions || model.scanning)
                 Divider()
                 Button("Export Albums & Favorites…") { Task { await model.exportMemberships() } }
                 Divider()
@@ -236,6 +249,21 @@ struct RootView: View {
         .background(WindowChrome(viewing: model.viewing != nil, savedFrame: model.savedWindowFrame))
         .sheet(item: $model.newAlbumRequest) { request in NewAlbumForPhotosSheet(request: request) }
         .sheet(isPresented: $model.showingShortcuts) { ShortcutsSheet() }
+        .sheet(item: $model.fileProblems) { sheet in FileProblemsSheet(sheet: sheet) }
+        .sheet(item: $model.newFolderRequest) { request in NewFolderSheet(request: request) }
+        .alert(model.permissionQuestion?.title ?? "", isPresented: Binding(
+            get: { model.permissionQuestion != nil },
+            set: { if !$0 { model.permissionQuestion = nil } }
+        ), presenting: model.permissionQuestion) { question in
+            if question.issues.isEmpty {
+                Button("OK") { model.permissionQuestion = nil }
+            } else {
+                Button(question.needsAdministrator ? "Use Administrator Password…" : "Fix") { model.fixPermissions(question) }
+                Button("Cancel", role: .cancel) { model.permissionQuestion = nil }
+            }
+        } message: { question in
+            Text(question.message)
+        }
         .alert("PhotoVault", isPresented: Binding(
             get: { model.errorMessage != nil },
             set: { if !$0 { model.errorMessage = nil } }
@@ -536,7 +564,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.messageText = question.title
         alert.informativeText = question.message
         alert.addButton(withTitle: action)
-        alert.addButton(withTitle: model.job == .scan ? "Keep Scanning" : "Keep Tagging")
+        alert.addButton(withTitle: model.job == .scan ? "Keep Scanning" : model.job == .moving ? "Keep Moving" : "Keep Tagging")
         return alert.runModal() == .alertFirstButtonReturn
     }
 
