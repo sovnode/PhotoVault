@@ -6,6 +6,18 @@ major version changes how vaults are stored.
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-10-23
+
+- **A user manual** in the app: Help › PhotoVault User Manual (⌘?). Nine
+  chapters, from getting started to troubleshooting, in a window of its own
+  with a search, and a Keyboard Shortcuts chapter (Help › Keyboard
+  Shortcuts, ⌘/).
+- Fixed: a PhotoVault that macOS runs from a temporary copy now says so, with
+  the fix, instead of saying it can't find its catalog.
+- The vault's README: copy a password-protected vault in Finder; a copy made
+  with hdiutil has no password.
+- The installer zip carries one plain time per file, in UTC.
+
 ## [1.7.0] — 2026-10-21
 
 - **Move photos into folders**: drag them from the grid onto a folder in the
