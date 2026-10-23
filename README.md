@@ -2,6 +2,9 @@
 
 A photo library that lives entirely inside one portable disk image.
 
+**[⬇ Download PhotoVault](https://github.com/sovnode/PhotoVault/releases/latest)** —
+the latest installer, for Macs with Apple silicon running macOS 14 or later.
+
 A vault is a macOS sparse bundle holding your photos and videos, the
 PhotoVault app, and its catalog of albums, favorites and tags. Copy the bundle
 to another Mac or an external drive and everything comes with it. PhotoVault
