@@ -5,6 +5,9 @@ Everything this app needs lives on this volume. Copy the sparse bundle
 anywhere and it works: the catalog stores paths relative to the volume root
 and never records a volume name, UUID, hostname or username.
 
+The full user manual is inside PhotoVault: Help > PhotoVault User Manual
+(Cmd-?).
+
 
 Opening it on another Mac
 -------------------------
@@ -31,15 +34,19 @@ albums and tags as they are.
 Copying the vault
 -----------------
 
-Use hdiutil, not Finder. Finder duplicates every band file individually and
-copies free space that convert skips:
+Eject the vault from PhotoVault (Cmd-E) first. A clean quit saves the
+catalog as one self-consistent file; a copy made while PhotoVault is open can
+catch it part-way through saving.
+
+Then copy the .sparsebundle in Finder, as you would any file. That's always
+fine. For a tidier copy, without the space left over from deleted photos,
+hdiutil can make one instead:
 
     hdiutil convert -format UDSB -imagekey sparse-band-size=65536 \
         -o Copy.sparsebundle PhotoVault.sparsebundle
 
-Quit PhotoVault first. A clean quit checkpoints the database into a single
-self-consistent file; copying mid-session captures a write-ahead log whose
-state may not match.
+But a copy made that way has no password: copy a password-protected vault in
+Finder.
 
 
 Ejecting

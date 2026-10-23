@@ -500,7 +500,9 @@ final class LibraryModel: ObservableObject {
     /// no sheet over it and nothing being typed. (An event made by the smoke
     /// test may carry no window: the main window is assumed.)
     private func mainWindow(for event: NSEvent) -> NSWindow? {
+        // The library's window: in the manual's, these keys are the manual's.
         guard let window = event.window ?? Self.typingWindow, window === Self.typingWindow, !window.isSheet,
+              window.identifier == LibraryWindow.identifier,
               window.attachedSheet == nil, !isEditingText else { return nil }
         return window
     }
@@ -1039,6 +1041,10 @@ final class LibraryModel: ObservableObject {
             fileProblems = FileProblems(action: .delete, problems: sample, doneNote: "12 items were deleted.")
         case "newfolder":
             newFolderRequest = NewFolderRequest(photoIDs: items.prefix(3).map(\.id), parent: VolumeLocator.mediaDirName)
+        case let show? where show.hasPrefix("manual"):
+            // "manual" or "manual:<chapter>": the user manual's window.
+            manualChapter = show.contains(":") ? String(show.split(separator: ":")[1]) : UserManual.chapters[0].id
+            smokeOpenManual = true
         default:
             break
         }
@@ -2649,8 +2655,10 @@ final class LibraryModel: ObservableObject {
         var id: Bool { smart }
     }
 
-    /// Help › Keyboard Shortcuts.
-    @Published var showingShortcuts = false
+    /// The user manual's chapter on show (Help › PhotoVault User Manual).
+    @Published var manualChapter = "welcome"
+    /// Smoke test only: open the manual's window.
+    @Published var smokeOpenManual = false
 
     /// The album or smart album being renamed, from the sidebar or File menu.
     @Published var renaming: RenameTarget?

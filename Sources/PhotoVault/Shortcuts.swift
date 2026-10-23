@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Every command's keyboard shortcut, in one place. The menu bar, the
-/// right-click menus, the buttons' tooltips and Help › Keyboard Shortcuts all
+/// right-click menus, the buttons' tooltips and the user manual's Keyboard
+/// Shortcuts chapter all
 /// read from here, so a shortcut can't show in one place and be different — or
 /// missing — in another. Showing it wherever the command is teaches the faster
 /// way to someone using the slower one.
@@ -43,7 +44,7 @@ enum Shortcut: CaseIterable {
         case .deselectAll: return "Deselect All"
         case .rescan: return "Rescan Changed Folders"
         case .fullRescan: return "Full Rescan"
-        case .stop: return "Stop Scan or Tagging"
+        case .stop: return "Stop Scan, Tagging or Moving"
         case .eject: return "Eject Volume"
         case .allMedia: return "Show All"
         case .photosOnly: return "Show Only Photos"
@@ -52,7 +53,7 @@ enum Shortcut: CaseIterable {
         case .smallerThumbnails: return "Smaller Thumbnails"
         case .wholePhotos: return "Show Whole Photos"
         case .sortUp: return "Sort Oldest First (A to Z), or Shuffle Again"
-        case .sortDown: return "Sort Newest First (Z to A), or Shuffle Again"
+        case .sortDown: return "Sort Newest First (Z to A)"
         case .autoScroll: return "Scroll Automatically / Pause"
         case .favorite: return "Add to Favorites / Remove"
         case .rotateLeft: return "Rotate Left"
@@ -155,44 +156,4 @@ extension View {
     /// The command's shortcut: live in the menu bar, shown beside the item in
     /// a right-click menu.
     func shortcut(_ s: Shortcut) -> some View { keyboardShortcut(s.key, modifiers: s.modifiers) }
-}
-
-/// Help › Keyboard Shortcuts: every shortcut, by where it works.
-struct ShortcutsSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Keyboard Shortcuts").font(.title2.weight(.semibold))
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(Shortcut.Place.allCases, id: \.self) { place in
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(place.rawValue).font(.headline)
-                            ForEach(Shortcut.allCases.filter { $0.place == place }, id: \.self) { s in
-                                HStack {
-                                    Text(s.title)
-                                    Spacer(minLength: 16)
-                                    Text(s.label).font(.body.monospaced()).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    Text("In the library and albums, with one photo picked, ← → ↑ ↓ pick the photo beside, above or below it, and ⇧ on its own opens it. In the viewer, ⇧ goes back to the library, as Esc does.")
-                        .font(.callout).foregroundStyle(.secondary)
-                    Text("Drag photos onto a folder in the sidebar to move them there, or onto an album to add them to it.")
-                        .font(.callout).foregroundStyle(.secondary)
-                    Text("Pinch zooms a photo or video; two fingers move it about while zoomed.")
-                        .font(.callout).foregroundStyle(.secondary)
-                }
-                .padding(.trailing, 8)
-            }
-            HStack {
-                Spacer()
-                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(20)
-        .frame(width: 440, height: 560)
-    }
 }

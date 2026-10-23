@@ -73,6 +73,9 @@ public enum VolumeLocator {
     /// Same as `resolveRoot`, but creates the catalog scaffolding if a `Photos`
     /// directory is present without one. Used on first launch in a fresh vault.
     public static func resolveOrBootstrap(from start: URL = Bundle.main.bundleURL) throws -> URL {
+        // Said as itself: the walk below would only report no catalog found,
+        // which sends people looking in the wrong place.
+        if start.path.contains("/AppTranslocation/") { throw VaultError.translocated }
         if let root = try? resolveRoot(from: start) {
             try ensureScaffolding(at: root)
             return root

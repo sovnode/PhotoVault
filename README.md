@@ -10,10 +10,14 @@ window state in your home folder, and it never connects to the internet.
 
 ## Features
 
-- **Browse** every photo and video in the vault, or folder by folder, sorted
-  by date taken, date created, file name, video length or at random, either
-  way round. Every view opens where you left it, and PhotoVault opens on the
-  view you were last in. The grid can scroll by itself at a speed you choose.
+- **Browse** every photo and video in the vault, or folder by folder — a
+  folder shows everything in it and its subfolders — sorted by date taken,
+  date created, file name, video length or at random, either way round. Every
+  view opens where you left it, and PhotoVault opens on the view you were last
+  in. The grid can scroll by itself at a speed you choose.
+- **Organize the files themselves**: drag photos onto a folder in the sidebar
+  to move them there (instantly, keeping their favorites, albums and tags), or
+  onto an album to add them. Undo Move puts them back.
 - **Albums, favorites and smart albums.** Smart albums pick their photos from
   tag rules: include or exclude tags, match any or all. Drag albums into the
   order you want, duplicate them, and sort each one its own way.
@@ -28,9 +32,13 @@ window state in your home folder, and it never connects to the internet.
   every video.
 - **Keyboard shortcuts** for nearly everything, shown beside each command and
   listed in Help › Keyboard Shortcuts.
+- **A user manual** in the app: Help › PhotoVault User Manual (⌘?).
 - **Rotate JPEGs** without re-encoding: only the orientation value changes, so
   every other byte, and the photo's dates, stay as they were.
-- **Trash** with Put Back. Files leave the disk only when you empty it.
+- **Trash** with Put Back. Files leave the disk only when you empty it. When
+  macOS won't let a file be deleted or moved, PhotoVault says why and offers
+  ways through; **Vault › Fix Permissions…** clears what stops them, such as
+  the rules Time Machine leaves on files restored from a backup.
 - **Eject** from inside the app (⌘E), which is the order macOS needs: the app
   runs from the vault, so the vault can't eject while it's open.
 
@@ -49,11 +57,11 @@ window state in your home folder, and it never connects to the internet.
    click **Open Anyway**. (The app is not notarized by Apple.)
 3. Choose one:
    - **Create a New Vault** — a new disk image, with PhotoVault, JoyTag and an
-     empty Photos folder. (Untick **Include photo tagging** to leave JoyTag
-     out and save about 370 MB; PhotoVault then doesn't tag photos.) Choose its name, where to save it, and the most it can
-     hold (it only takes the space its photos use). It can be protected with a
-     password: then nobody can open it without one — and a forgotten password
-     can't be recovered.
+     empty Photos folder. Choose its name, where to save it, and the most it
+     can hold (it only takes the space its photos use). It can be protected
+     with a password: then nobody can open it without one — and a forgotten
+     password can't be recovered. Untick **Include photo tagging** to leave
+     JoyTag out and save about 370 MB; PhotoVault then doesn't tag photos.
    - **Install on an Existing Vault** — puts this version of PhotoVault on a
      vault you have. Its photos, albums and tags stay as they are.
 
@@ -63,6 +71,19 @@ tags them.
 
 To update later, open a newer installer and choose **Install on an Existing
 Vault**.
+
+## Using a plain folder instead of a disk image
+
+PhotoVault also works in an ordinary folder: put `PhotoVault.app` in a folder
+beside a folder called `Photos`, holding your photos and videos, and open it.
+PhotoVault makes its catalog (a hidden `.catalog` folder) beside them, and
+the installer's **Install on an Existing Vault** accepts such a folder too.
+
+This way is **mostly untested**. Everything is meant to work as it does on a
+disk image, but it hasn't had the same use. Some things differ by nature: the
+folder is only as portable and private as wherever it lives, there's no
+password, and **Eject** ejects the whole drive the folder is on, if it's an
+external one. Keep a copy of your photos elsewhere while you try it.
 
 ## Keeping photos on the vault
 

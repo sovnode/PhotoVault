@@ -204,15 +204,45 @@ struct PhotoVaultApp: App {
                     .shortcut(.eject)
             }
             CommandGroup(replacing: .help) {
-                Button("Keyboard Shortcuts") { model.showingShortcuts = true }
-                    .keyboardShortcut("?", modifiers: .command)
+                HelpCommands(model: model)
             }
         }
+        // The user manual, in a window of its own.
+        Window("PhotoVault User Manual", id: "manual") {
+            UserManualView()
+                .environmentObject(model)
+        }
+        .defaultSize(width: 980, height: 720)
+    }
+}
+
+enum LibraryWindow {
+    static let identifier = NSUserInterfaceItemIdentifier("library")
+}
+
+/// Help › PhotoVault User Manual and Keyboard Shortcuts: both open the
+/// manual's window, the second at its Keyboard Shortcuts chapter.
+private struct HelpCommands: View {
+    @ObservedObject var model: LibraryModel
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("PhotoVault User Manual") {
+            if model.manualChapter == UserManual.shortcutsID { model.manualChapter = UserManual.chapters[0].id }
+            openWindow(id: "manual")
+        }
+        .keyboardShortcut("?", modifiers: .command)
+        Button("Keyboard Shortcuts") {
+            model.manualChapter = UserManual.shortcutsID
+            openWindow(id: "manual")
+        }
+        .keyboardShortcut("/", modifiers: .command)
     }
 }
 
 struct RootView: View {
     @EnvironmentObject var model: LibraryModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         ZStack {
@@ -248,8 +278,8 @@ struct RootView: View {
         }
         .background(WindowChrome(viewing: model.viewing != nil, savedFrame: model.savedWindowFrame))
         .sheet(item: $model.newAlbumRequest) { request in NewAlbumForPhotosSheet(request: request) }
-        .sheet(isPresented: $model.showingShortcuts) { ShortcutsSheet() }
         .sheet(item: $model.fileProblems) { sheet in FileProblemsSheet(sheet: sheet) }
+        .onChange(of: model.smokeOpenManual) { _, open in if open { openWindow(id: "manual") } }
         .sheet(item: $model.newFolderRequest) { request in NewFolderSheet(request: request) }
         .alert(model.permissionQuestion?.title ?? "", isPresented: Binding(
             get: { model.permissionQuestion != nil },
@@ -412,6 +442,7 @@ struct WindowChrome: NSViewRepresentable {
         var lastViewing: Bool?
         var frameRestored = false
         var placed = false
+        var closeObserver: NSObjectProtocol?
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -439,6 +470,19 @@ struct WindowChrome: NSViewRepresentable {
             // Saved window state for an image browser is a snapshot of the
             // window contents, written outside the volume.
             window.isRestorable = false
+            window.identifier = LibraryWindow.identifier
+            // Closing the library closes the manual too, so PhotoVault quits
+            // as it always has: with the manual still open, the library
+            // window couldn't be brought back.
+            state.closeObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.willCloseNotification, object: window, queue: .main
+            ) { _ in
+                MainActor.assumeIsolated {
+                    for other in NSApp.windows where other !== window && other.isVisible && !(other is NSPanel) {
+                        other.close()
+                    }
+                }
+            }
             window.styleMask.insert(.fullSizeContentView)
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
@@ -575,7 +619,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The main window's frame, for the catalog — unless it's in full screen,
     /// where the frame is just the screen and isn't worth restoring.
     private func currentWindowFrame() -> String? {
-        guard let window = NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) }),
+        // The library's window, not the manual's.
+        guard let window = NSApp.windows.first(where: { $0.identifier == LibraryWindow.identifier && $0.isVisible }),
               !window.styleMask.contains(.fullScreen) else { return nil }
         return NSStringFromRect(window.frame)
     }

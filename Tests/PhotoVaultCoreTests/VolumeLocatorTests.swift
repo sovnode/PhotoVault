@@ -30,6 +30,11 @@ struct VolumeLocatorTests {
         #expect(throws: VaultError.translocated) {
             _ = try VolumeLocator.resolveRoot(from: fake)
         }
+        // What the app calls on opening, too: before, it dropped this and said
+        // only that no catalog was found.
+        #expect(throws: VaultError.translocated) {
+            _ = try VolumeLocator.resolveOrBootstrap(from: fake)
+        }
         #expect(VaultError.translocated.errorDescription?.contains("quarantine") == true,
                 "the message has to name the fix")
     }

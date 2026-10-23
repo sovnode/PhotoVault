@@ -74,3 +74,40 @@ struct GridColumnsTests {
         #expect(GridView.columns(width: 0, cellSize: 160) == 1, "never none")
     }
 }
+
+@MainActor
+@Suite("The user manual")
+struct UserManualTests {
+    @Test func readsTheMarkdownItIsWrittenIn() {
+        let blocks = UserManual.blocks("""
+            Opening words
+            carried on.
+
+            ## A section
+            - one
+            - two
+              still two
+            1. first
+            2. second
+
+            ### Sub
+            A **bold** end.
+            """)
+        #expect(blocks == [.paragraph("Opening words carried on."), .heading("A section"),
+                           .bullets(["one", "two still two"]), .numbered(["first", "second"]),
+                           .subheading("Sub"), .paragraph("A **bold** end.")])
+    }
+
+    @Test func everyChapterIsThereAndUsesOnlyWhatTheWindowShows() {
+        #expect(UserManual.chapters.count == 9)
+        #expect(UserManual.all.last?.id == UserManual.shortcutsID)
+        #expect(Set(UserManual.all.map(\.id)).count == UserManual.all.count, "no two chapters share an id")
+        for chapter in UserManual.chapters {
+            #expect(chapter.markdown.count > 500, "\(chapter.id) has its text")
+            for line in chapter.markdown.split(separator: "\n") {
+                #expect(!line.hasPrefix("# ") && !line.hasPrefix("|") && !line.hasPrefix(">") && !line.contains("]("),
+                        "\(chapter.id): \(line.prefix(60))")
+            }
+        }
+    }
+}
