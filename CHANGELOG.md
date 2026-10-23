@@ -17,6 +17,13 @@ major version changes how vaults are stored.
 - The vault's README: copy a password-protected vault in Finder; a copy made
   with hdiutil has no password.
 - The installer zip carries one plain time per file, in UTC.
+- **Include sub-folders**: a checkbox beside All / Photos / Videos when a
+  folder is shown. Unticked, the folder shows only what's directly in it;
+  each folder remembers its own.
+- **Vault › Clear Finder Thumbnail Cache…**: after browsing the vault's photos
+  in Finder's icon or gallery view, asks macOS to clear Quick Look's
+  thumbnails (for every file on the Mac; it can't be done for the vault
+  alone).
 
 ## [1.7.0] — 2026-10-21
 

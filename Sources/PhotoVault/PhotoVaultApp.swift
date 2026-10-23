@@ -197,6 +197,7 @@ struct PhotoVaultApp: App {
                     .disabled(model.trashCount == 0)
                 Button("Fix Permissions…") { model.checkPermissions() }
                     .disabled(model.checkingPermissions || model.scanning)
+                Button("Clear Finder Thumbnail Cache…") { model.confirmingQuickLookClear = true }
                 Divider()
                 Button("Export Albums & Favorites…") { Task { await model.exportMemberships() } }
                 Divider()
@@ -281,6 +282,12 @@ struct RootView: View {
         .sheet(item: $model.fileProblems) { sheet in FileProblemsSheet(sheet: sheet) }
         .onChange(of: model.smokeOpenManual) { _, open in if open { openWindow(id: "manual") } }
         .sheet(item: $model.newFolderRequest) { request in NewFolderSheet(request: request) }
+        .alert("Clear Finder's thumbnail cache?", isPresented: $model.confirmingQuickLookClear) {
+            Button("Clear") { model.clearQuickLookCache() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(LibraryModel.quickLookClearMessage)
+        }
         .alert(model.permissionQuestion?.title ?? "", isPresented: Binding(
             get: { model.permissionQuestion != nil },
             set: { if !$0 { model.permissionQuestion = nil } }

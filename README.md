@@ -24,7 +24,7 @@ window state in your home folder, and it never connects to the internet.
 - **Albums, favorites and smart albums.** Smart albums pick their photos from
   tag rules: include or exclude tags, match any or all. Drag albums into the
   order you want, duplicate them, and sort each one its own way.
-- **Automatic tags from [JoyTag](https://github.com/fpgaminer/joytag)**, which
+- **Automatic tags from JoyTag**, which
   names what's in a picture (5,813 tags) and runs on your Mac, from the
   thumbnails PhotoVault already keeps. Tags are kept in the vault's catalog:
   your photos are never rewritten. Tags are grouped under everyday names in an
@@ -142,7 +142,7 @@ Every build is checked for any trace of the Mac it was built on
 
 ## Acknowledgements
 
-Automatic tags come from [JoyTag](https://github.com/fpgaminer/joytag), under
+Automatic tags come from JoyTag (github.com/fpgaminer/joytag), under
 the Apache License 2.0. Its licence ships with the model, in every installer
 and every vault.
 

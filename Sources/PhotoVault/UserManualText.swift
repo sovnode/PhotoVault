@@ -311,6 +311,8 @@ All Media is also the top of your folder tree. Click the small arrow beside it t
 
 Choosing a folder shows everything in it **and in all of its subfolders**. The number beside a folder counts the same way: everything in the folder and below it. Rest the pointer on a folder to see its count. If some of its photos are in subfolders, this also tells you how many are directly in the folder itself.
 
+To see only what's directly in a folder, untick **Include sub-folders**, beside the **All**, **Photos** and **Videos** switch above the grid. It only appears when a folder is chosen. Each folder remembers its own setting, so a folder you unticked opens that way next time. It starts ticked.
+
 ### Favorites and the Trash
 
 **Favorites** shows every photo and video you have marked as a favorite, except those in the Trash. It has no number beside it. Favorites and Albums explains how to mark them.
@@ -1502,6 +1504,8 @@ PhotoVault is built to keep your photos on the vault. One Finder habit can still
 
 **Don't browse the Photos folder in Finder's icon view or gallery view.** These views ask macOS's Quick Look for a small picture of each photo. Quick Look keeps those pictures in a shared cache on your Mac, outside the vault. Finder's list and column views don't do this. PhotoVault can't prevent it; it depends only on how you browse.
 
+If you have browsed the vault that way, choose **Vault › Clear Finder Thumbnail Cache…**. After you confirm, PhotoVault asks macOS to clear Quick Look's thumbnails. It clears them for every file on the Mac, not just the vault's; nothing is lost, and Finder makes them again as it needs them, showing plain icons for a moment. Close any Finder windows showing the vault first, or Finder may make some again straight away. macOS doesn't say which thumbnails it cleared, so the status line only says that macOS was asked. Other traces Finder keeps, such as recent folders and the .DS_Store files on the vault, aren't affected.
+
 ### Reveal in Finder
 
 To see a photo's file in Finder, right-click it in the grid and choose **Reveal in Finder (list view only)**. Finder shows the folder in whatever view it was last set to. So set the Photos folder and the folders in it to list view, or column view, before you use this. In Finder, choose View › as List (⌘2).
@@ -1715,6 +1719,10 @@ If you tried Finder's eject first, PhotoVault lets go of the vault and can't do 
 If the vault is still there after PhotoVault has quit, something else is using it. Often macOS is still finishing with a video, which takes a moment. Wait a few seconds, then eject the vault in Finder. Also quit any other app that has a file from the vault open.
 
 If your vault is an ordinary folder rather than a disk image, **Eject Volume** ejects the whole drive the folder is on. If the folder is on your Mac's own disk, it just quits PhotoVault. Using PhotoVault in an ordinary folder is mostly untested.
+
+### Finder showed my vault's photos in icon or gallery view
+
+Quick Look then keeps thumbnails of those photos in your home folder, outside the vault. Close the Finder windows showing the vault, then choose **Vault › Clear Finder Thumbnail Cache…** and click **Clear**. It clears Finder's thumbnails for every file on the Mac; Finder makes them again as needed. From then on, use list or column view for the vault.
 
 ### The vault keeps getting bigger
 

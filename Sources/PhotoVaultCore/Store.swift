@@ -363,8 +363,9 @@ public actor Store {
     // MARK: - Reads
 
     public func items(scope: LibraryScope, filter: MediaFilter, sort: PhotoOrder = .date, ascending: Bool = true,
-                      seed: UInt64 = 0, groups: TagGroups = TagGroups(text: "")) throws -> [PhotoItem] {
-        try catalog.items(scope: scope, filter: filter, sort: sort, ascending: ascending, seed: seed, groups: groups)
+                      seed: UInt64 = 0, groups: TagGroups = TagGroups(text: ""), subfolders: Bool = true) throws -> [PhotoItem] {
+        try catalog.items(scope: scope, filter: filter, sort: sort, ascending: ascending, seed: seed, groups: groups,
+                          subfolders: subfolders)
     }
 
     /// The vault's sort order: the one chosen, or else the default its photos

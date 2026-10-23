@@ -111,3 +111,17 @@ struct UserManualTests {
         }
     }
 }
+
+@MainActor
+@Suite("Clearing Finder's thumbnails")
+struct QuickLookClearTests {
+    /// Never run here: it would clear the Mac's Quick Look cache.
+    @Test func runsQuickLooksOwnResetAndSaysWhatItDoes() {
+        #expect(LibraryModel.quickLookClearCommand == ["/usr/bin/qlmanage", "-r", "cache"])
+        let message = LibraryModel.quickLookClearMessage
+        #expect(message.contains("every file on this Mac"))
+        #expect(message.contains("Nothing is lost"))
+        #expect(message.contains("Close any Finder windows"))
+        #expect(message.contains("aren't affected"))
+    }
+}

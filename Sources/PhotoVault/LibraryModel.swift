@@ -384,6 +384,38 @@ final class LibraryModel: ObservableObject {
         }
     }
 
+    /// Include Sub-folders, for the folder on show: on, a folder shows
+    /// everything beneath it; off, only what's directly in it. Each folder
+    /// keeps its own, in the vault; on until it's unticked.
+    @Published private(set) var includeSubfolders = true
+    private var folderSubfolders: [String: Bool] = [:]
+
+    private static func subfoldersKey(_ scope: LibraryScope) -> String { "subfolders.\(scope.storageValue)" }
+
+    private func subfoldersSetting(for scope: LibraryScope) async -> Bool {
+        guard case .folder = scope else { return true }
+        let key = Self.subfoldersKey(scope)
+        if let known = folderSubfolders[key] { return known }
+        let saved = await store?.setting(key).map { $0 != "0" } ?? true
+        folderSubfolders[key] = saved
+        return saved
+    }
+
+    func setIncludeSubfolders(_ on: Bool) {
+        guard case .folder = scope, on != includeSubfolders else { return }
+        let key = Self.subfoldersKey(scope)
+        folderSubfolders[key] = on
+        includeSubfolders = on
+        // A different set of photos: start from the top rather than at a
+        // place the other set had.
+        restoringPlace = true
+        lastShown = nil
+        Task {
+            await store?.setSetting(key, on ? "1" : "0")
+            await reload()
+        }
+    }
+
     /// All, Photos or Videos, as each view was last left: the filter is the
     /// view's own, not one for every view.
     private var viewFilters: [String: MediaFilter] = [:]
@@ -1022,6 +1054,25 @@ final class LibraryModel: ObservableObject {
         }
         report("each of \(nodes.count - 1) folders shows its subfolders' photos too \(wrong)", nodes.count > 2 && wrong.isEmpty)
         report("and the status line counts the folder, not the vault (\(status))", status == Self.itemCount(items.count))
+
+        // Include Sub-folders unticked: only what's directly in the folder,
+        // and remembered when the folder is opened again.
+        if let parent = nodes.first(where: { ($0.children ?? []).isEmpty == false && $0.id != folderTree?.id }) {
+            scope = .folder(parent.id)
+            await wait(1)
+            report("a folder starts with Include sub-folders ticked", includeSubfolders && items.count == parent.totalCount)
+            setIncludeSubfolders(false)
+            await wait(1)
+            report("unticked, it shows only what's directly in it (\(items.count) of \(parent.totalCount))",
+                   !includeSubfolders && items.count == parent.directCount)
+            scope = .all
+            await wait(1)
+            scope = .folder(parent.id)
+            await wait(1)
+            report("and it's still unticked when the folder is opened again", !includeSubfolders && items.count == parent.directCount)
+            setIncludeSubfolders(true)
+            await wait(1)
+        }
         scope = .all
         await wait(1)
         _ = store
@@ -1401,8 +1452,10 @@ final class LibraryModel: ObservableObject {
             // between catalog reads made switching views take a quarter of a
             // second on a library of thousands of photos.
             let sort = try await store.sortSetting(for: scope)
+            let subfolders = await subfoldersSetting(for: scope)
             let newItems = try await store.items(scope: scope, filter: filter, sort: sort?.order ?? .date,
-                                                 ascending: sort?.ascending ?? true, seed: sort?.seed ?? 0, groups: tagGroups)
+                                                 ascending: sort?.ascending ?? true, seed: sort?.seed ?? 0, groups: tagGroups,
+                                                 subfolders: subfolders)
             let albums = try await store.albums(), smartAlbums = try await store.smartAlbums()
             let total = try await store.photoCount()
             let trash = try await store.trashCount()
@@ -1411,6 +1464,7 @@ final class LibraryModel: ObservableObject {
             for a in albums { counts[a.id] = try await store.albumCount(a.id) }
 
             if self.sort != sort { self.sort = sort }
+            if includeSubfolders != subfolders { includeSubfolders = subfolders }
             if items != newItems { items = newItems }
             // Rows appear and disappear in the sidebar without animating: an
             // animated removal could leave the old row's text behind.
@@ -2279,6 +2333,40 @@ final class LibraryModel: ObservableObject {
     func revealProblems() {
         guard let sheet = fileProblems, let root else { return }
         NSWorkspace.shared.activateFileViewerSelecting(sheet.problems.map { root.appendingPathComponent($0.relPath) })
+    }
+
+    // MARK: - Finder's thumbnails
+
+    /// Vault › Clear Finder Thumbnail Cache…: asking first.
+    @Published var confirmingQuickLookClear = false
+
+    static let quickLookClearMessage = """
+        Browsing the vault's Photos folder in Finder's icon or gallery view makes Quick Look keep thumbnails of those photos in your home folder. This asks macOS to clear them.
+
+        It clears Finder's thumbnails for every file on this Mac, not just the vault's. Nothing is lost: Finder makes them again as it needs them, showing plain icons for a moment.
+
+        Close any Finder windows showing the vault first, or Finder may make some of its thumbnails again straight away. macOS doesn't say which thumbnails it cleared, so PhotoVault can only report that it asked. Other traces Finder keeps, such as recent folders and the .DS_Store files on the vault, aren't affected.
+        """
+
+    /// What runs: Quick Look's own command for resetting its thumbnail cache.
+    /// The cache itself can't be read or changed by any app.
+    nonisolated static let quickLookClearCommand = ["/usr/bin/qlmanage", "-r", "cache"]
+
+    func clearQuickLookCache() {
+        status = "Clearing Finder's thumbnails…"
+        Task {
+            let ok = await Task.detached(priority: .userInitiated) { () -> Bool in
+                let p = Process()
+                p.executableURL = URL(fileURLWithPath: Self.quickLookClearCommand[0])
+                p.arguments = Array(Self.quickLookClearCommand.dropFirst())
+                p.standardOutput = FileHandle.nullDevice
+                p.standardError = FileHandle.nullDevice
+                guard (try? p.run()) != nil else { return false }
+                p.waitUntilExit()
+                return p.terminationStatus == 0
+            }.value
+            status = ok ? "macOS was asked to clear Finder's thumbnails" : "Finder's thumbnails couldn't be cleared"
+        }
     }
 
     // MARK: - Fix Permissions

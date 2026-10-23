@@ -189,6 +189,14 @@ struct GridView: View {
             .frame(width: 220)
             .help("Show all, only photos or only videos (⌘1, ⌘2, ⌘3)")
 
+            if case .folder = model.scope {
+                Toggle("Include sub-folders", isOn: Binding(get: { model.includeSubfolders },
+                                                            set: { model.setIncludeSubfolders($0) }))
+                    .toggleStyle(.checkbox)
+                    .fixedSize()
+                    .help("Show the photos in this folder's sub-folders too. Each folder remembers its own setting.")
+            }
+
             Spacer()
             ActivityStatus(activity: model.activity)
             Spacer()

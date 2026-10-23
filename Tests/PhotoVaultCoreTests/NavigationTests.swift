@@ -133,6 +133,11 @@ struct CatalogV3Tests {
         #expect(try names("Photos/2019/summer") == ["IMG_1.jpg", "IMG_2.mov"])
         #expect(try names("Photos").count == 8, "the top folder holds everything")
         #expect(try names("Photos/50%_off") == ["IMG_5.jpg"], "% and _ in a name are just characters")
+        // Include Sub-folders unticked: only what's directly in it.
+        #expect(Set(try catalog.items(scope: .folder("Photos/2019"), filter: .all, subfolders: false).map(\.displayName))
+                == ["IMG_9.jpg", "IMG_10.jpg"])
+        #expect(try catalog.items(scope: .folder("Photos"), filter: .all, subfolders: false).map(\.displayName) == ["top.jpg"])
+        #expect(try catalog.items(scope: .all, filter: .all, subfolders: false).count == 8, "only folders have sub-folders")
     }
 
     @Test func nameOrderIsNaturalAndDateOrderPutsUndatedLast() throws {

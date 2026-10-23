@@ -660,7 +660,8 @@ public final class Catalog {
     // MARK: - Queries
 
     public func items(scope: LibraryScope, filter: MediaFilter, sort: PhotoOrder = .date, ascending: Bool = true,
-                      seed: UInt64 = 0, includeMissing: Bool = false, groups: TagGroups = TagGroups(text: "")) throws -> [PhotoItem] {
+                      seed: UInt64 = 0, includeMissing: Bool = false, groups: TagGroups = TagGroups(text: ""),
+                      subfolders: Bool = true) throws -> [PhotoItem] {
         var joins = ""
         var clauses: [String] = []
         var scopeID: Int64?
@@ -692,8 +693,14 @@ public final class Catalog {
             // LIKE: folder names can hold % and _, and the range uses the
             // index. "/" sorts just before "0", so [path/, path0) is exactly
             // the paths under it — not a neighbour like "2019b".
-            clauses.append("(p.folder = ? OR (p.folder >= ? AND p.folder < ?))")
-            texts += [path, path + "/", path + "0"]
+            // Or, with `subfolders` off, only what's directly in it.
+            if subfolders {
+                clauses.append("(p.folder = ? OR (p.folder >= ? AND p.folder < ?))")
+                texts += [path, path + "/", path + "0"]
+            } else {
+                clauses.append("p.folder = ?")
+                texts.append(path)
+            }
         }
         // The Trash shows only trashed rows; every other view shows none.
         if case .trash = scope {

@@ -500,7 +500,7 @@ echo "Moving photos into folders, and a file Empty Trash can't delete"
 MARK=$(wc -l < "$WORK/app.log" | tr -d ' ')
 launch PHOTOVAULT_SMOKE_FILES=1
 t=0
-while ! tail -n +$((MARK + 1)) "$WORK/app.log" | grep -q "smoke: files and the status line\|smoke: files: "; do
+while ! tail -n +$((MARK + 1)) "$WORK/app.log" | grep -q "smoke: files and it.s still unticked\|smoke: files: "; do
     [ "$t" -ge 120 ] && break
     sleep 1; t=$((t + 1))
 done
