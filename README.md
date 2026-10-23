@@ -148,4 +148,5 @@ and every vault.
 
 ## License
 
-All rights reserved. No licence has been chosen yet.
+PhotoVault is released under the [MIT License](LICENSE). JoyTag, which the
+installer carries, keeps its own licence, the Apache License 2.0.
