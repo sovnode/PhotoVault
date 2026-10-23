@@ -129,7 +129,17 @@ Scripts/check-no-personal-data.sh "$APP" || { echo "error: the installer holds a
 NAME="PhotoVault-Installer-$VERSION${COMMIT:+-$COMMIT}"
 ZIP="build/$NAME.zip"
 rm -f "$ZIP" "$ZIP.sha256"
-ditto -c -k --norsrc --noextattr --keepParent "$APP" "$ZIP"
+# Every file gets one time — the release commit's (the current one's, from
+# source) — or each would carry when it was last read and changed on this Mac.
+# Times aren't part of a signature, so the app stays signed.
+if [ "$FROM_SOURCE" = 1 ]; then STAMP_REF=HEAD; else STAMP_REF="v$VERSION"; fi
+STAMP="$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y%m%d%H%M.%S "$STAMP_REF")"
+TZ=UTC find "$APP" -exec touch -h -t "$STAMP" {} +
+# zip -X, in UTC: one plain time per entry and nothing else. ditto also
+# stored each file's access time, and its local time beside its UTC time —
+# when files were last read here, and this Mac's time zone. -y keeps any
+# symbolic link a link; permissions are kept as always.
+(cd "$(dirname "$APP")" && TZ=UTC /usr/bin/zip -q -r -y -X "$NAME.zip" "$(basename "$APP")")
 # What someone downloading it gets: unpacked, it must still be signed, whole,
 # and clean.
 mkdir -p "$CHECK"
