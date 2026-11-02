@@ -24,6 +24,8 @@ major version changes how vaults are stored.
   in Finder's icon or gallery view, asks macOS to clear Quick Look's
   thumbnails (for every file on the Mac; it can't be done for the vault
   alone).
+- Fixed: after Move to Trash (⌘⌫) in the grid, the next photo is picked, so
+  the arrow keys carry on without a click.
 
 ## [1.7.0] — 2026-10-21
 

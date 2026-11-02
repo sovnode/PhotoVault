@@ -1226,6 +1226,17 @@ final class LibraryModel: ObservableObject {
             report("← back to the first", picked() == 0)
             await press(left, 123, arrows)
             report("and no further", picked() == 0)
+            // ⌘⌫ on the photo picked: the next one is picked in its place,
+            // and the arrows carry on from it. Then it's put back.
+            let doomed = items[1], after = items[2]
+            select(only: doomed.id)
+            await press(String(Character(UnicodeScalar(NSBackspaceCharacter)!)), 51, .command)
+            await wait(1)
+            report("after ⌘⌫ the next photo is picked", selection == [after.id] && !items.contains { $0.id == doomed.id })
+            await press(right, 124, arrows)
+            report("and → moves on from it", selection.count == 1 && selection.first != after.id)
+            await restore([doomed])
+            await wait(1)
             // Far down, the grid scrolls to show it.
             let far = items.count - 1
             select(only: items[far - 1].id)
@@ -2162,9 +2173,21 @@ final class LibraryModel: ObservableObject {
     /// untouched until the Trash is emptied.
     func moveToTrash(_ targets: [PhotoItem]) async {
         guard let store, !targets.isEmpty else { return }
+        // The photo that takes their place stays picked — the next one, or the
+        // one before at the end — so the arrow keys carry on from there
+        // without a click.
+        let gone = Set(targets.map(\.id))
+        let ids = items.map(\.id)
+        let last = ids.lastIndex { gone.contains($0) }, first = ids.firstIndex { gone.contains($0) }
+        let next = last.flatMap { l in ids[(l + 1)...].first { !gone.contains($0) } }
+            ?? first.flatMap { f in ids[..<f].last { !gone.contains($0) } }
         do { try await store.moveToTrash(targets.map(\.id)) } catch { errorMessage = error.localizedDescription }
         clearSelection()
         await reload()
+        if viewing == nil, let next, let index = items.firstIndex(where: { $0.id == next }) {
+            select(only: next)
+            revealRequest = RevealRequest(index: index)
+        }
         status = targets.count == 1 ? "Moved 1 item to the Trash" : "Moved \(targets.count) items to the Trash"
     }
 
