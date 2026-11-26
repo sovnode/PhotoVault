@@ -6,6 +6,8 @@ major version changes how vaults are stored.
 
 ## [Unreleased]
 
+## [1.9.0] — 2026-11-26
+
 - **A map** of where a view's photos and videos were taken: Grid | Map in
   the toolbar, or View › Show as Map (⇧⌘M). Nearby photos gather into
   circles with a count; close in, photos show as thumbnails. Click one to
