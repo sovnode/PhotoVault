@@ -29,6 +29,11 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/Icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # The default tag groups, used when a vault has no Tag Groups.txt of its own.
 cp "Resources/Tag Groups.txt" "$APP/Contents/Resources/Tag Groups.txt"
+# The world outline the map is drawn on (Natural Earth, public domain):
+# PhotoVault never downloads a map.
+cp "Resources/World Map.pvmap" "$APP/Contents/Resources/World Map.pvmap"
+# Its terrain shading (Natural Earth's shaded relief, public domain).
+cp "Resources/World Relief.pvrelief" "$APP/Contents/Resources/World Relief.pvrelief"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 # The quarantine note belongs at the volume root, beside the app — it is the

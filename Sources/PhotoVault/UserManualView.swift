@@ -184,8 +184,11 @@ extension UserManual {
         ("← → ↑ ↓", "In the grid, with one photo picked: pick the photo beside, above or below it"),
         ("⇧", "Shift on its own: open the photo picked in the grid; in the viewer, go back to the library"),
         ("↩", "In the sidebar: rename the album or smart album picked"),
-        ("Pinch", "Zoom a photo or video, or change the thumbnails' size in the grid"),
-        ("Two fingers", "Move a zoomed photo or video about"),
+        ("Pinch", "Zoom a photo or video, or change the thumbnails' size in the grid, or zoom the map"),
+        ("Two fingers", "Move a zoomed photo or video about; on the map, swipe up or down to zoom"),
+        ("Drag", "On the map: move it"),
+        ("+ −", "On the map: zoom in or out"),
+        ("← → ↑ ↓", "On the map: move it"),
     ]
 
     /// A chapter's Markdown as blocks.

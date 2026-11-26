@@ -72,6 +72,12 @@ struct PhotoVaultApp: App {
             CommandGroup(replacing: .printItem) {}
             CommandGroup(after: .sidebar) {
                 let library = model.viewing == nil
+                // What's only for the grid is greyed out on the map.
+                let grid = library && !model.showingMap
+                Toggle("Show as Map", isOn: Binding(get: { model.showingMap }, set: { _ in model.toggleMapCommand() }))
+                    .shortcut(.mapToggle)
+                    .disabled(!library || model.scope == .trash)
+                Divider()
                 ForEach([(MediaFilter.all, Shortcut.allMedia), (.photos, .photosOnly), (.videos, .videosOnly)], id: \.0) { filter, key in
                     Toggle(key.title, isOn: Binding(get: { model.filter == filter }, set: { _ in model.filter = filter }))
                         .shortcut(key)
@@ -80,10 +86,10 @@ struct PhotoVaultApp: App {
                 Divider()
                 Button("Bigger Thumbnails") { model.stepThumbnailSize(bigger: true) }
                     .shortcut(.biggerThumbnails)
-                    .disabled(!library || model.thumbnailSize >= GridView.sizeRange.upperBound)
+                    .disabled(!grid || model.thumbnailSize >= GridView.sizeRange.upperBound)
                 Button("Smaller Thumbnails") { model.stepThumbnailSize(bigger: false) }
                     .shortcut(.smallerThumbnails)
-                    .disabled(!library || model.thumbnailSize <= GridView.sizeRange.lowerBound)
+                    .disabled(!grid || model.thumbnailSize <= GridView.sizeRange.lowerBound)
                 Toggle("Show Whole Photos", isOn: Binding(get: { model.showWholePhotos },
                                                           set: { _ in model.toggleWholePhotos() }))
                     .shortcut(.wholePhotos)
@@ -91,22 +97,22 @@ struct PhotoVaultApp: App {
                 if model.sort?.order == .random {
                     Button("Shuffle Again") { model.sortCommand(ascending: true) }
                         .shortcut(.sortUp)
-                        .disabled(!library)
+                        .disabled(!grid)
                 } else {
                     let order = model.sort?.order ?? .date
                     Button(order.directionLabel(ascending: true)) { model.sortCommand(ascending: true) }
                         .shortcut(.sortUp)
-                        .disabled(!library || model.sort == nil)
+                        .disabled(!grid || model.sort == nil)
                     Button(order.directionLabel(ascending: false)) { model.sortCommand(ascending: false) }
                         .shortcut(.sortDown)
-                        .disabled(!library || model.sort == nil)
+                        .disabled(!grid || model.sort == nil)
                 }
                 Divider()
                 // Space only in the library: in the viewer it plays and
                 // pauses a video. A greyed-out item leaves its key to the view.
                 Button(model.autoScrolling ? "Pause Scrolling" : "Scroll Automatically") { model.autoScrollCommand() }
                     .shortcut(.autoScroll)
-                    .disabled(!library || model.items.isEmpty)
+                    .disabled(!grid || model.items.isEmpty)
                 Menu("Scrolling Speed") {
                     ForEach(LibraryModel.scrollSpeeds, id: \.self) { rows in
                         Toggle(GridView.speedLabel(rows), isOn: Binding(get: { model.scrollSpeed == rows },
@@ -137,17 +143,22 @@ struct PhotoVaultApp: App {
                     .shortcut(.trash)
                     .disabled(!model.canTrashCurrent)
                 Divider()
-                // The classifiers listed are the ones installed in the
-                // vault: JoyTag is the only one PhotoVault knows.
+                // The classifiers listed are the ones installed in the vault
+                // (the installer puts one on: SigLIP 2 or JoyTag).
                 Menu("Classifier") {
                     Menu("Re-classify Selection With") {
-                        Button("JoyTag") { model.retagCommand() }
-                            .disabled(!model.canRetagCurrent)
+                        ForEach(model.installedTaggers.isEmpty ? [SigLIP.prefix] : model.installedTaggers, id: \.self) { prefix in
+                            Button(OwnTaggers.tool(prefix)) { model.retagCommand(with: prefix) }
+                                .disabled(!model.canRetagCurrent || !model.installedTaggers.contains(prefix))
+                        }
                     }
                     Button("Tag Untagged Photos") { model.tagUntaggedCommand() }
                         .disabled(!model.canTag || model.scanning)
                     Divider()
-                    Toggle("Show R18 Tags", isOn: Binding(get: { model.showR18 }, set: { model.setShowR18($0) }))
+                    // R18 is JoyTag's: a SigLIP 2 vault has no such tags to show.
+                    if model.offersR18 {
+                        Toggle("Show R18 Tags", isOn: Binding(get: { model.showR18 }, set: { model.setShowR18($0) }))
+                    }
                     if let why = model.taggerUnavailable {
                         Divider()
                         Text(why)

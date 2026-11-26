@@ -23,7 +23,7 @@ PhotoVault also works in an ordinary folder, with PhotoVault.app beside a folder
 ## Three promises
 
 - **Nothing is written outside the vault.** No preferences, caches, thumbnails or window positions go into your home folder. (Finder's icon and gallery views do make their own thumbnails there, so browse Photos in list or column view.)
-- **No internet.** PhotoVault never goes online. Tagging runs on your Mac. A photo's location is shown as coordinates, never on a map.
+- **No internet.** PhotoVault never goes online. Tagging runs on your Mac. The map is drawn from a world map that comes with PhotoVault: nothing is downloaded to draw it, and no location is sent anywhere.
 - **Your originals stay as they are.** Albums, favorites and tags live in the catalog, not in your photos. The one exception: rotating a JPEG changes only its orientation value, never the picture. Other kinds of photo can't be rotated. PhotoVault moves a file, or fixes its permissions, only when you ask, and deletes one only when you empty the Trash.
 
 ## What it needs
@@ -37,7 +37,7 @@ The **sidebar** lists your library. Under **Library** are **All Media**, which o
 
 The **grid** shows thumbnails of whatever you picked in the sidebar. Videos show a play symbol and their length. Favorites show a heart.
 
-The toolbar above the grid holds, from left to right: the **All**, **Photos** and **Videos** switch (⌘1, ⌘2, ⌘3); the status line; in a smart album, **Edit Filter**; the **Sort** menu and its direction button (⌥⌘↑, ⌥⌘↓); the play button, which scrolls the grid by itself (Space); and the thumbnail size slider (⌘+, ⌘−). The status line counts what you're looking at or have selected. While PhotoVault is busy, it shows progress and a **Stop** button (⌘.).
+The toolbar above the grid holds, from left to right: the **Grid** and **Map** buttons (⇧⌘M), which show the view as thumbnails or as a map of where its photos were taken; the **All**, **Photos** and **Videos** switch (⌘1, ⌘2, ⌘3); the status line; in a smart album, **Edit Filter**; the **Sort** menu and its direction button (⌥⌘↑, ⌥⌘↓); the play button, which scrolls the grid by itself (Space); and the thumbnail size slider (⌘+, ⌘−). The status line counts what you're looking at or have selected. While PhotoVault is busy, it shows progress and a **Stop** button (⌘.).
 
 Double-click a thumbnail, or pick one and press ⇧ on its own, to open the **viewer**. It fills the window with one photo or video. Move the pointer to show its buttons along the top. Click **Library**, or press Esc or ⇧, to go back.
 
@@ -107,11 +107,11 @@ The installer hands the password to macOS, which encrypts the disk image. The in
 
 ### Tagging
 
-**Include photo tagging (JoyTag)** is ticked to start with. JoyTag looks at each photo and names what it sees, so smart albums can pick photos by what's in them. It runs on your Mac and never changes your photos. The note under the box says how much space it takes on the vault: about 370 MB.
+The **Tagging** menu chooses the model that tags the vault's photos: **SigLIP 2** (chosen to start with), **JoyTag**, or **None**. A vault gets one model at most. The note under the menu says how much space it takes on the vault: about 355 MB for SigLIP 2, 370 MB for JoyTag.
 
-Untick it to save that space. PhotoVault then won't tag photos, so smart albums can't pick photos by what's in them. You can add tagging later by installing again with the box ticked.
+Choose **None** to save that space. PhotoVault then won't tag photos, so smart albums can't pick photos by what's in them. You can add tagging later by installing again with a model chosen.
 
-JoyTag needs macOS 15 or later. On macOS 14, PhotoVault works without it. For more about tags, see Smart Albums and Automatic Tags.
+Tagging needs macOS 15 or later. On macOS 14, PhotoVault works without it. For more about tags, see Smart Albums and Automatic Tags.
 
 ### Creating it
 
@@ -160,12 +160,12 @@ It's best to quit PhotoVault yourself first, with ⌘Q, so nothing you're in the
 
 ### Tagging
 
-The **Include photo tagging (JoyTag)** box works as it does for a new vault:
+The **Tagging** menu works as it does for a new vault, and starts on **SigLIP 2**:
 
-- Ticked, on a vault that already has JoyTag: the note says it's on this vault already.
-- Ticked, on a vault without JoyTag: JoyTag is added. The note says how much space it takes.
-- Unticked, on a vault without JoyTag: the note says how much space that saves. PhotoVault won't tag photos.
-- Unticked, on a vault that has JoyTag: the note turns orange. JoyTag will be taken off the vault, freeing its space. PhotoVault won't tag new photos. The tags it has already made are kept, and smart albums that use them still work. Install again with the box ticked to bring it back.
+- The model chosen is on the vault already: the note says so.
+- The model chosen isn't on the vault: it's added. The note says how much space it takes.
+- The vault has the other model: the note turns orange. That model will be taken off the vault, freeing its space. The tags it has already made are kept, and smart albums that use them still work. Install again with it chosen to bring it back.
+- **None**: the note turns orange. PhotoVault won't tag photos, and a model on the vault is taken off.
 
 ### Installing
 
@@ -226,7 +226,7 @@ The library window opens. The status line, in the middle of the bar at the top o
 
 ## The first scan
 
-The first time PhotoVault opens a vault, it looks through the whole Photos folder. The status line says "Scanning all folders…". Then it makes thumbnails, with a progress bar and a count, for example "Building thumbnails — 1,234 of 1,234". After that it reads any tags already written into the photos, such as keywords added by another app: "Reading tags — 1,234 of 1,234". While the window has nothing to show yet, it says "Scanning…".
+The first time PhotoVault opens a vault, it looks through the whole Photos folder. The status line says "Scanning all folders…". Then it makes thumbnails, with a progress bar and a count, for example "Building thumbnails — 1,234 of 1,234". After that it reads any tags already written into the photos, such as keywords added by another app: "Reading tags — 1,234 of 1,234". The first time a vault is opened after PhotoVault is updated, it may also read where each photo and video was taken, once: "Reading locations — 1,234 of 1,234". While the window has nothing to show yet, it says "Scanning…".
 
 Thumbnails are the small pictures in the grid. PhotoVault makes one for every photo and video. It keeps them inside the vault, so they travel with it, and nothing goes into your home folder. For a big library the first scan can take a while. Later openings are much quicker, because the thumbnails are already made.
 
@@ -254,7 +254,7 @@ While JoyTag works, the status line says "Loading JoyTag…", then "Tagging with
 
 JoyTag's tags are kept in PhotoVault's catalog. Your photos themselves are never changed. See Smart Albums and Automatic Tags.
 
-On macOS 14, or on a vault where tagging was left out, PhotoVault doesn't tag photos. Image › Classifier says why. To add tagging to a vault, open PhotoVault Installer and install on the vault with **Include photo tagging (JoyTag)** ticked.
+On macOS 14, or on a vault where tagging was left out, PhotoVault doesn't tag photos. Image › Classifier says why. To add tagging to a vault, open PhotoVault Installer and install on the vault with a model chosen under **Tagging**.
 
 ## Rescanning
 
@@ -507,6 +507,26 @@ When you look at your vault in Finder, keep Finder in list or column view. Finde
 When you're in a folder, an album, a smart album or Favorites, **Show in Library** takes you to the same photo in All Media, where you can see the photos around it. To use it, right-click a single photo and choose **Show in Library**, or select one photo and choose Image › Show in Library. It also works on the photo that is open in the viewer.
 
 All Media opens with the photo selected and scrolled into view. If All Media was showing only photos or only videos, and that would hide this item, it goes back to showing all. Show in Library doesn't work for photos in the Trash.
+
+## The map
+
+The **Grid** and **Map** buttons at the far left of the toolbar switch a view between its thumbnails and a map of where its photos and videos were taken. You can also choose **View › Show as Map** (⇧⌘M).
+
+The map follows the view you picked: All Media, a folder, an album, a smart album or Favorites, and its All, Photos or Videos switch. Only photos and videos that record where they were taken can be on it, and a note at the bottom says how many of the view's items that is. Most phones record it. Scans, screenshots and many cameras don't. The Trash has no map.
+
+Photos taken near each other gather into a circle with a count. Zoom in and the circles break up. Zoomed out, a single photo is a dot. Close in, from about street level, it's a small thumbnail.
+
+- **Move the map**: click and drag it. The arrow keys move it too.
+- **Zoom**: swipe up or down with two fingers on a trackpad, as on a web map. Or pinch, turn a mouse's scroll wheel, double-click, or press + or −. ⌥-double-click zooms out. A swipe or the wheel zooms in on the spot under the pointer. The **+** and **−** buttons at the top right zoom too, and the button below them shows all the view's photos at once.
+- **Click a circle, a dot or a thumbnail** to see its photos in a panel beside it, with how many there are and when they were taken. The map stays where it is. When there are more than fit, scroll the panel with two fingers or the scroll wheel. Click anywhere else to close it.
+- **Click a photo in the panel** to see it in the library. As with Show in Library, All Media opens as a grid, with the photo selected and scrolled into view.
+- **Double-click a circle** to zoom in until its photos separate.
+
+**Each view keeps its own.** A view you leave as a map is a map the next time you open it, at the same place. PhotoVault remembers this in the vault.
+
+The map shows coastlines, lakes, borders, the names of towns and cities, and shading where the land rises into hills and mountains, so you can see whether photos were taken in the mountains or on the plains. The shading is about 2 km across at its finest: zoomed in further, it fades to a soft tone. The map has no streets: close in, your photos sit on a plain background. It's drawn on your Mac from Natural Earth's public-domain world map and shaded relief, which come with PhotoVault. Nothing is downloaded to draw it, and no location is sent anywhere.
+
+In the viewer, the properties panel's **Show on Map** button opens the view as a map, close in on that photo.
 """#),
         Chapter(id: "viewer", title: "Viewing Photos and Videos", symbol: "eye", markdown: #"""
 ## Opening a photo or video
@@ -606,7 +626,7 @@ The panel shows these sections, with their headings in capitals:
 - **DATE**: **Taken** is the date stored inside the photo or video. If there isn't one, you see **Modified**, the date the file was last changed, with the note "The photo itself carries no date." **Created** is the file's creation date as Finder shows it, when the file has one.
 - **IMAGE** (or **VIDEO**): the **Dimensions** in pixels, the right way round, or "Unknown". A video also shows its **Duration**, when it is known. If PhotoVault can't play a video, this section says "This file can't be played."
 - **CAMERA**: only for photos that record it. It shows the **Camera**, the **Lens** and the **Exposure**: aperture, shutter speed, ISO and focal length, as far as the photo records them.
-- **LOCATION**: only for photos that record where they were taken. The **Coordinates** appear as text, with the note "Shown as text only; no map is loaded." PhotoVault never loads a map, because drawing one would mean sending the location over the internet.
+- **LOCATION**: only for photos and videos that record where they were taken. The **Coordinates** appear as text, with a **Show on Map** button, which shows the view you opened the photo from as a map, close in on that photo. The map is drawn on your Mac: the location isn't sent anywhere. See The map.
 - **LIBRARY**: **Favorite** says Yes or No. **Albums** lists the albums the item is in, or says None. Smart albums aren't listed here. An item in the Trash also shows "In the Trash."
 - **TAGS**: the item's tags, grouped by where they came from. **JoyTag** comes first, with the version and the date it tagged the photo, when these were recorded. Tags from any other tagging tool come next. **Keywords already in the photo** comes last. If there are none, you see "No tags."
 
@@ -951,8 +971,8 @@ If you quit while PhotoVault is tagging, it asks first, under the title "PhotoVa
 
 The tagging commands are in Image › Classifier:
 
-- **Re-classify Selection With › JoyTag** tags the selected photos again. In the viewer, it tags the photo on screen again. See "Re-tagging photos" below.
-- **Tag Untagged Photos** tags every photo JoyTag hasn't tagged yet. If there's nothing to tag, nothing starts, and the status line says "Every photo is tagged".
+- **Re-classify Selection With › JoyTag** or **› SigLIP 2** tags the selected photos again with that model. In the viewer, it tags the photo on screen again. See "Re-tagging photos" below. A model that isn't installed on the vault is greyed out.
+- **Tag Untagged Photos** tags every photo that JoyTag, or SigLIP 2 if it's installed, hasn't tagged yet. If there's nothing to tag, nothing starts, and the status line says "Every photo is tagged".
 - **Show R18 Tags** shows or hides the tags in the R18 group. See "R18 tags" below.
 
 Both tagging commands are greyed out while a scan, a move or a tagging run is going. If tagging can't work on this Mac or this vault, a greyed-out line at the bottom of the menu says why. See "When tagging isn't available" below.
@@ -977,6 +997,7 @@ Re-tagging isn't available in the Trash or for a photo in the Trash. It also isn
 Open a photo in the viewer and choose Image › Show Properties (⌘I). The Tags section at the bottom of the panel lists the photo's tags, grouped by where they came from:
 
 - **JoyTag**, with the JoyTag version and the date the photo was tagged.
+- **SigLIP 2**, likewise, if it's installed on the vault.
 - Tags from another tagging tool, under that tool's name, if the tool marked them as its own.
 - **Keywords already in the photo**, which are keywords another app saved in the file.
 
@@ -986,11 +1007,35 @@ If a photo has no tags, the section says "No tags.". Underscores in tag names ap
 
 Tagging needs macOS 15 or later, and JoyTag has to be installed on the vault. If either is missing, Image › Classifier shows the reason in a greyed-out line, and the tagging commands are greyed out.
 
-- **"JoyTag needs macOS 15 or later."** PhotoVault itself runs on macOS 14, but JoyTag doesn't. Everything else still works, including smart albums. They can use keywords already in your photos, and tags made when the vault was open on a Mac with macOS 15 or later.
-- **"Photo tagging isn't installed on this vault. To add it, open PhotoVault Installer and install on this vault with Photo tagging ticked."** Tagging was left out when PhotoVault was installed, to save space. To add it, open PhotoVault Installer, choose **Install on an Existing Vault** and pick this vault. Make sure **Include photo tagging (JoyTag)** is ticked (it is unless you untick it). Then click the button at the bottom, which says **Install**, **Update**, **Reinstall** or **Install Older Version**, depending on the PhotoVault already on the vault. JoyTag takes about 370 MB on the vault. If PhotoVault is open from the vault, the installer quits it for you.
-- Other messages here, such as "JoyTag's model is missing from this vault.", mean JoyTag's files on the vault are incomplete or can't be read. Installing again with **Include photo tagging (JoyTag)** ticked puts back any missing files.
+- **"Photo tagging needs macOS 15 or later."** PhotoVault itself runs on macOS 14, but JoyTag and SigLIP 2 don't. Everything else still works, including smart albums. They can use keywords already in your photos, and tags made when the vault was open on a Mac with macOS 15 or later.
+- **"Photo tagging isn't installed on this vault. To add it, open PhotoVault Installer and install on this vault with a model chosen under Tagging."** Tagging was left out when PhotoVault was installed, to save space. To add it, open PhotoVault Installer, choose **Install on an Existing Vault** and pick this vault. Choose a model in the **Tagging** menu (it starts on SigLIP 2). Then click the button at the bottom, which says **Install**, **Update**, **Reinstall** or **Install Older Version**, depending on the PhotoVault already on the vault. A model takes about 355 to 370 MB on the vault. If PhotoVault is open from the vault, the installer quits it for you.
+- Other messages here, such as "JoyTag's model is missing from this vault.", mean the model's files on the vault are incomplete or can't be read. Installing again with the same model chosen under **Tagging** puts back any missing files.
 
-To take tagging off a vault, install again with that box unticked. This frees the space JoyTag used. The tags JoyTag already made are kept, and smart albums that use them still work.
+To take tagging off a vault, install again with **None** chosen under Tagging. This frees the space the model used. The tags JoyTag already made are kept, and smart albums that use them still work.
+
+## Automatic tags with SigLIP 2
+
+### What SigLIP 2 does
+
+SigLIP 2 is a second tagging model, made for real photos and videos rather than drawings. It knows 900 everyday tags: people and what they're doing, animals, plants, food, places, landscapes, weather, vehicles and things. It has tags JoyTag lacks, such as "man", "woman", "farm", "park", "picnic", "tent", "truck", "cow" and "deer", and many for travel and the outdoors, such as "hiking trail", "alpine lake", "sea cliffs" and "road bike".
+
+SigLIP 2 works like JoyTag. It runs on your Mac without the internet, looks at each photo's thumbnail, keeps its tags in the vault's catalog and never changes your photos. The status line names the model at work, for example "Tagging with SigLIP 2". SigLIP 2 also uses about 400 MB of memory while it works, and takes about as long per photo as JoyTag.
+
+In the filter panel, SigLIP 2's tags and JoyTag's form one list, so "beach" from either is one tag. Its tags are listed in the tag groups file too, so they appear under the usual groups. A vault whose tag groups file was edited before SigLIP 2 came keeps its own file, so SigLIP 2's tags may show under Other there. See "Tag groups" below.
+
+### Getting ready for a vault
+
+SigLIP 2's scores mean different things for different tags. A photo of a trail easily scores high for "hiking trail", but a photo with a person in it may score only a little for "man". So SigLIP 2 also gives a photo a tag when its score is far higher than that tag usually gets in this vault.
+
+To learn what's usual, the first time SigLIP 2 runs on a vault it looks at up to 400 of its photos. The status line says "Getting SigLIP 2 ready for this vault…", with a progress bar. This takes about a minute and happens once. What it learns is kept in the vault's catalog, and is nothing more than a pair of numbers for each tag. A vault with fewer than 60 photos isn't prepared this way. Its photos get only the tags SigLIP 2 is sure of, and PhotoVault tries again on a later run.
+
+Because of this, SigLIP 2's tags can differ a little from one vault to another. Tags already made don't change when the vault grows.
+
+### Choosing SigLIP 2 or JoyTag
+
+PhotoVault Installer puts one tagging model on a vault: SigLIP 2 unless you choose JoyTag or None in its **Tagging** menu. To change, install again with the other chosen: the one there is taken off, and the tags it made are kept.
+
+On a vault tagged by SigLIP 2, Image › Classifier has no Show R18 Tags. SigLIP 2's tags include nothing explicit.
 
 ## Smart albums
 
@@ -1396,9 +1441,9 @@ PhotoVault also keeps a few hidden items at the top of the vault. To see them in
 
 ### Inside .catalog
 
-- **catalog.sqlite**: the catalog, PhotoVault's record of your library. It holds your albums, smart albums, favorites, the Trash, tags and each photo's details. It also keeps PhotoVault's settings, such as the window's size, sort orders, thumbnail size, slideshow time, and where you were in each view.
+- **catalog.sqlite**: the catalog, PhotoVault's record of your library. It holds your albums, smart albums, favorites, the Trash, tags and each photo's details, including where it was taken. It also keeps PhotoVault's settings, such as the window's size, sort orders, thumbnail size, slideshow time, and where you were in each view.
 - **thumbs.pack**: the thumbnails, the small pictures in the grid. They're made once and kept.
-- **models**: JoyTag, the photo-tagging model, in a folder called JoyTag, with its licence. It takes about 370 MB. It's only there if photo tagging was installed.
+- **models**: the photo-tagging model, in a folder called SigLIP2 or JoyTag, with its licence. It takes about 355 or 370 MB. It's only there if photo tagging was installed.
 - **backups**: before a new version of PhotoVault changes the catalog's format, it saves a copy of the catalog as it was. Those copies go in this folder.
 - **memberships.json**: a list of your favorites and of the photos in each album. It only appears after you choose Vault › Export Albums & Favorites…. Each export replaces the last one.
 - **tmp**: a folder PhotoVault uses for its own work.
@@ -1466,7 +1511,7 @@ To put a newer PhotoVault on a vault, use the newer PhotoVault Installer:
 
 1. Open PhotoVault Installer and choose **Install on an Existing Vault**.
 2. Pick the vault. Vaults that are open are listed beside **Vault:**. For one that isn't open, click **Choose…** and pick its .sparsebundle. If no vault is open, the installer says "No vault is open", and you can also drag the .sparsebundle onto that box.
-3. Look at **Include photo tagging (JoyTag)**. It's ticked to start with, which keeps photo tagging, or adds it to a vault that doesn't have it yet.
+3. Look at the **Tagging** menu. It starts on **SigLIP 2**. Choose **JoyTag** to keep or add JoyTag instead, or **None** for no tagging.
 4. Click **Update**.
 5. When it's done, click **Open PhotoVault**, or **Done** to close the installer.
 
@@ -1475,7 +1520,7 @@ What to expect:
 - The installer quits PhotoVault if it's open from that vault. A scan or tagging run carries on the next time PhotoVault opens, but a move or re-tag stops where it is. So it's best to quit PhotoVault yourself first, with ⌘Q.
 - Your photos, albums, favorites, tags and settings stay as they are. The installer checks that nothing in .catalog has changed.
 - Your .Tag Groups.txt is kept. A visible Tag Groups.txt from an older version is renamed to .Tag Groups.txt, which hides it. README.txt is replaced with the new version.
-- If you untick photo tagging, JoyTag is taken off the vault. That frees about 370 MB inside the vault, but the .sparsebundle itself doesn't get smaller until you compact it (see Disk space). Tags it has already made are kept, and smart albums that use them still work. To bring tagging back, install again with the box ticked.
+- A model you didn't choose is taken off the vault. That frees about 355 to 370 MB inside the vault, but the .sparsebundle itself doesn't get smaller until you compact it (see Disk space). Tags it has already made are kept, and smart albums that use them still work. To bring it back, install again with it chosen.
 - The button reads **Reinstall** if the vault already has this version, and **Install** if it has no PhotoVault yet.
 - If the vault has a newer PhotoVault than the installer, the button reads **Install Older Version**, and a warning says the older version will go in its place. It doesn't ask again before installing, so only click it if you mean to.
 - The first time a new version opens a vault, it may update the catalog's format. If it does, it first saves a copy of the old catalog in the backups folder inside .catalog.
@@ -1516,7 +1561,7 @@ To see a photo's file in Finder, right-click it in the grid and choose **Reveal 
 - Dragging photos from the grid to Finder or another app copies nothing. Drags only work inside PhotoVault, onto folders and albums in the sidebar.
 - PhotoVault keeps its settings in the vault's catalog and writes nothing to your Mac's preferences.
 - JoyTag tags photos on your Mac without the internet, and nothing is written into your photos.
-- A photo's location is shown as text only. No map is loaded.
+- The map is drawn from a world map that comes with PhotoVault. Nothing is downloaded to draw it, and no location is sent anywhere.
 - Spotlight is asked to stay out of the vault.
 - When you switch to another app, PhotoVault releases the full-size pictures it was holding in memory.
 
@@ -1528,7 +1573,7 @@ PhotoVault is made to live in a disk image, but it also works in an ordinary fol
 
 1. Make a folder for the vault. Inside it, make a folder named exactly **Photos**, and put your photos and videos in it.
 2. Open PhotoVault Installer, choose **Install on an Existing Vault** and click **Choose…**. Choose the folder you made, the one that holds Photos. The installer may list it under the name of the drive it's on, with the folder's location underneath. That's expected.
-3. Click **Install**. PhotoVault.app, README.txt and .Tag Groups.txt go beside Photos. JoyTag goes into .catalog if photo tagging is ticked.
+3. Click **Install**. PhotoVault.app, README.txt and .Tag Groups.txt go beside Photos. The tagging model chosen goes into .catalog.
 4. Click **Open PhotoVault**, or open PhotoVault.app from that folder.
 
 You can also just copy PhotoVault.app into the folder beside Photos. Photo tagging then isn't available, and Image › Classifier says "Photo tagging isn't installed on this vault." There's no .Tag Groups.txt to edit either, so PhotoVault uses its built-in tag groups, and no README.txt. To add it, install on the folder as described above.
@@ -1597,6 +1642,12 @@ You may have edited a photo in another app and it still looks the same in PhotoV
 
 PhotoVault finds photos whose names end in .jpg, .jpeg, .png, .heic, .heif, .gif, .tif, .tiff, .bmp or .webp, and the videos listed above. It skips files and folders whose names start with a full stop.
 
+### A photo isn't on the map
+
+The map only shows photos and videos that record where they were taken. Open the photo and look at its properties panel (⌘I): if there's no **Location** section, the file doesn't say where it was taken, and PhotoVault can't tell. Also check the view's **All**, **Photos** and **Videos** switch, which applies to the map as it does to the grid.
+
+If another app added a location to the file after PhotoVault last read it, choose **Vault › Full Rescan** (⌥⇧⌘R). It checks every file, and reads again any that has changed.
+
 ### A video shows a question mark
 
 A question mark in place of the play symbol means the player built into macOS, which PhotoVault uses, can't open this video. Some kinds of video, such as MKV, VP9 and older AVI files, play in other apps but not in that player. Its thumbnail is a grey square with a warning sign, because PhotoVault couldn't take a picture from it either. If you open the video, PhotoVault shows "No playable video track". The Properties panel (**Image › Show Properties**, ⌘I) says "This file can't be played."
@@ -1658,8 +1709,8 @@ To fix these problems before they happen, choose **Vault › Fix Permissions…*
 
 Open **Image › Classifier**. If tagging can't run, a greyed-out line at the bottom of that menu says why:
 
-- "JoyTag needs macOS 15 or later." Tagging needs macOS 15 or later. Everything else in PhotoVault works on macOS 14.
-- "Photo tagging isn't installed on this vault…" means **Include photo tagging (JoyTag)** was unticked when the vault was made or last updated. To add tagging, open PhotoVault Installer and choose **Install on an Existing Vault**. Pick this vault, tick **Include photo tagging (JoyTag)**, and click **Update** or **Reinstall**. Tagging takes about 370 MB on the vault. The vault's photos, albums and tags stay as they are.
+- "Photo tagging needs macOS 15 or later." Tagging needs macOS 15 or later. Everything else in PhotoVault works on macOS 14.
+- "Photo tagging isn't installed on this vault…" means **None** was chosen under Tagging when the vault was made or last updated. To add tagging, open PhotoVault Installer and choose **Install on an Existing Vault**. Pick this vault, choose a model under **Tagging**, and click **Update** or **Reinstall**. A model takes about 355 to 370 MB on the vault. The vault's photos, albums and tags stay as they are.
 - Any other line says that JoyTag's files on this vault are missing or can't be used, for example "JoyTag's model is missing from this vault." Install on the vault again the same way, with the box ticked.
 
 **Tag Untagged Photos**, **Re-classify Selection With › JoyTag** and the right-click **Re-tag with JoyTag** are also greyed out while PhotoVault is scanning, moving or tagging photos.
@@ -1687,7 +1738,7 @@ When the installer can't finish, it shows a title such as "The vault couldn't be
 - "There's already a vault called … there. Choose another name, or install on it instead." A disk image with that name is already in the folder you chose. Type another name, or choose **Install on an Existing Vault**.
 - "The installer can't save in …. Choose another folder." Your account can't add files to that folder. Click **Choose…** beside **Save in:** and pick another, such as your home folder.
 - "PhotoVault is still open from this vault. Quit it, then try again." PhotoVault didn't quit within about 15 seconds. Quit it with ⌘Q, then click the button at the bottom again.
-- "JoyTag didn't copy completely. Is the vault full?" There wasn't room for photo tagging. Make room on the drive the disk image is saved on and install again, or install with **Include photo tagging (JoyTag)** unticked.
+- "SigLIP 2 didn't copy completely. Is the vault full?" (or JoyTag) There wasn't room for photo tagging. Make room on the drive the disk image is saved on and install again, or install with **None** chosen under Tagging.
 - "PhotoVault was copied, but its signature doesn't check out, so macOS may refuse to open it." Download PhotoVault Installer again, then install again.
 - "Something in the vault's catalog changed while installing, and nothing should have. Check the vault before using it." Open PhotoVault from the vault and check that your albums, favorites and tags are as you left them.
 
@@ -1731,7 +1782,7 @@ A vault's disk image grows as you add photos, but it doesn't shrink by itself wh
 - **Move to Trash** frees no space. The file stays in its folder until you choose **Vault › Empty Trash…**.
 - **Empty Trash** deletes the files for good. Their space is then free inside the vault for new photos, but the disk image stays the same size on your Mac.
 - PhotoVault keeps a small thumbnail of every photo and video in the vault's .catalog folder. The thumbnails only ever add up. When you delete, rotate or change a photo, its old thumbnail stays.
-- Photo tagging takes about 370 MB. To free that room inside the vault, install PhotoVault on the vault again with **Include photo tagging (JoyTag)** unticked. Tags already made are kept.
+- Photo tagging takes about 355 to 370 MB. To free that room inside the vault, install PhotoVault on the vault again with **None** chosen under Tagging. Tags already made are kept.
 
 To give the space back to your Mac:
 

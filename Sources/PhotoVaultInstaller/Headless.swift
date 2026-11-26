@@ -18,8 +18,9 @@ enum Headless {
 
           --size <size>       the most the new vault can hold, as hdiutil reads it: 500g, 1t
           --allow-older       install over a newer PhotoVault
-          --without-tagging   leave photo tagging (JoyTag) off the vault — and take it
-                              off one that has it — to save its space
+          --tagging <model>   the photo tagging the vault gets: siglip (the default),
+                              joytag or none. Any other model on the vault is taken off
+          --without-tagging   the same as --tagging none
           --password-stdin    a password, read from standard input: protects a new
                               vault, or opens a protected one to install on it
           --mount-root <dir>  mount disk images there, out of Finder's sidebar
@@ -39,7 +40,7 @@ enum Headless {
     static func run(_ arguments: [String]) -> Int32? {
         let args = Array(arguments.dropFirst())
         var commands = ["--create", "--install", "--inspect", "--help", "-h"]
-        var options = ["--size", "--mount-root"]
+        var options = ["--size", "--mount-root", "--tagging"]
         #if DEBUG
         commands.append("--snapshot")
         options.append("--payload")
@@ -53,7 +54,7 @@ enum Headless {
         var values: [String: String] = [:]
         var allowOlder = false
         var passwordFromStdin = false
-        var tagging = true
+        var tagger = Tagger.default
         var i = 0
         while i < args.count {
             let arg = args[i]
@@ -65,7 +66,7 @@ enum Headless {
                 allowOlder = true
                 i += 1
             } else if arg == "--without-tagging" {
-                tagging = false
+                tagger = .none
                 i += 1
             } else if arg == "--password-stdin" {
                 passwordFromStdin = true
@@ -75,6 +76,10 @@ enum Headless {
             }
         }
         guard let value = values[command] else { return fail(usage) }
+        if let name = values["--tagging"] {
+            guard let chosen = Tagger(argument: name) else { return fail("--tagging takes siglip, joytag or none.\n\n\(usage)") }
+            tagger = chosen
+        }
         let target = URL(fileURLWithPath: value)
         let mountRoot = values["--mount-root"].map { URL(fileURLWithPath: $0) }
         // Read, used and dropped; never printed.
@@ -107,7 +112,7 @@ enum Headless {
                 print("PhotoVault Installer \(payload.version): creating “\(name)” in \(target.deletingLastPathComponent().path)")
                 let report = try VaultSetup.create(name: name, in: target.deletingLastPathComponent(),
                                                    size: values["--size"] ?? VaultSetup.defaultSize, payload: payload,
-                                                   password: password, tagging: tagging, mountRoot: mountRoot, progress: say)
+                                                   password: password, tagger: tagger, mountRoot: mountRoot, progress: say)
                 describe(report)
             } else {
                 let (vault, _) = try VaultSetup.open(target, mountRoot: mountRoot, password: password)
@@ -115,7 +120,7 @@ enum Headless {
                     throw SetupError("The vault has PhotoVault \(installed), newer than \(payload.version). Add --allow-older to install the older version.")
                 }
                 print("PhotoVault Installer \(payload.version): installing on “\(vault.name)”")
-                let report = try VaultSetup.install(into: target, payload: payload, password: password, tagging: tagging,
+                let report = try VaultSetup.install(into: target, payload: payload, password: password, tagger: tagger,
                                                     mountRoot: mountRoot, progress: say)
                 describe(report)
             }
@@ -139,11 +144,14 @@ enum Headless {
         print("  Vault:      \(report.mountPoint.path)")
         if let image = report.createdImage { print("  Disk image: \(image.path)") }
         print("  PhotoVault: \(report.version)\(report.replacedVersion.map { " (replaced \($0))" } ?? "")")
-        switch report.joyTag {
-        case .installed(let v): print("  JoyTag:     \(v), installed")
-        case .alreadyThere(let v): print("  JoyTag:     \(v), there already")
-        case .leftOut: print("  JoyTag:     left out — no photo tagging")
-        case .removed(let v): print("  JoyTag:     \(v), taken off the vault — no photo tagging")
+        for model in Tagger.models {
+            let label = "\(model.title):".padding(toLength: 12, withPad: " ", startingAt: 0)
+            switch report.change(for: model) {
+            case .installed(let v): print("  \(label)\(v), installed")
+            case .alreadyThere(let v): print("  \(label)\(v), there already")
+            case .leftOut: print("  \(label)not on the vault")
+            case .removed(let v): print("  \(label)\(v), taken off the vault")
+            }
         }
         switch report.tagGroups {
         case .added: print("  Tag groups: added")
@@ -159,6 +167,7 @@ enum Headless {
         print("PhotoVault: \(vault.installedVersion ?? "not installed")")
         print("Catalog:    \(vault.hasCatalog ? "yes" : "none yet")")
         print("JoyTag:     \(vault.joyTagVersion ?? "not installed")")
+        print("SigLIP 2:   \(vault.siglipVersion ?? "not installed")")
         print("Open:       \(vault.photoVaultIsOpen ? "PhotoVault is open from it" : "no")")
     }
 }
@@ -194,10 +203,11 @@ enum Snapshots {
         let created = SetupReport(mountPoint: URL(fileURLWithPath: "/Volumes/PhotoVault"),
                                   createdImage: home.appendingPathComponent("PhotoVault.sparsebundle"),
                                   version: payload.version, replacedVersion: nil, quitPhotoVault: false,
-                                  joyTag: .installed(payload.joyTagVersion), tagGroups: .added)
+                                  joyTag: .leftOut, siglip: .installed(payload.siglipVersion), tagGroups: .added)
         let installed = SetupReport(mountPoint: older.mountPoint, createdImage: nil, version: payload.version,
                                     replacedVersion: "1.2.0", quitPhotoVault: true,
-                                    joyTag: .installed(payload.joyTagVersion), tagGroups: .renamed)
+                                    joyTag: .removed(payload.joyTagVersion), siglip: .installed(payload.siglipVersion),
+                                    tagGroups: .renamed)
         let install = { (vault: ExistingVault) in
             { (m: InstallerModel) in
                 m.mode = .install

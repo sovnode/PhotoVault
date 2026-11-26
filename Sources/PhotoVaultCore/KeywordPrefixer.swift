@@ -22,8 +22,8 @@ public struct KeywordPrefixer {
         guard ToolRecord.isValidPrefix(prefix) else {
             throw VaultError.cannotWriteTags("“\(prefix)” isn't a usable prefix: lower-case letters and digits only.")
         }
-        guard prefix != JoyTag.prefix else {
-            throw VaultError.cannotWriteTags("“\(JoyTag.prefix)” is PhotoVault's own prefix, for JoyTag.")
+        guard !OwnTaggers.prefixes.contains(prefix) else {
+            throw VaultError.cannotWriteTags("“\(prefix)” is PhotoVault's own prefix, for \(OwnTaggers.tool(prefix)).")
         }
         let label = label.trimmingCharacters(in: .whitespaces)
         guard !label.isEmpty, !label.contains(";") else {

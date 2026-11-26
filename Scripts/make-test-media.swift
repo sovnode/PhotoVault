@@ -33,7 +33,30 @@ func keywords(for i: Int) -> [String] {
     }
 }
 
-func jpeg(size: Int, hue: Double, keywords: [String] = []) -> Data {
+/// Four photos in five record where they were taken: near one of a few
+/// public landmarks — never anyone's own places — in XMP, as some apps write
+/// it, so the map has something to show. Every tenth is exactly at its
+/// landmark, so a few share one spot, as a burst of photos does.
+let landmarks: [(lat: Double, lon: Double)] = [
+    (51.5007, -0.1246),     // Big Ben
+    (48.8584, 2.2945),      // the Eiffel Tower
+    (-33.8568, 151.2153),   // Sydney Opera House
+    (35.3606, 138.7274),    // Mount Fuji
+    (37.8199, -122.4783),   // the Golden Gate Bridge
+]
+func place(for i: Int) -> (lat: Double, lon: Double)? {
+    guard i % 5 != 4 else { return nil }
+    let l = landmarks[i % landmarks.count]
+    guard i % 10 != 0 else { return l }
+    let t = Double(i)
+    return (l.lat + sin(t) * 0.004, l.lon + cos(t * 1.3) * 0.006)
+}
+func xmpCoordinate(_ v: Double, _ pos: String, _ neg: String) -> String {
+    let a = abs(v), d = Int(a)
+    return String(format: "%d,%.4f%@", d, (a - Double(d)) * 60, v < 0 ? neg : pos)
+}
+
+func jpeg(size: Int, hue: Double, keywords: [String] = [], place: (lat: Double, lon: Double)? = nil) -> Data {
     let ctx = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
                         space: CGColorSpaceCreateDeviceRGB(),
                         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
@@ -52,15 +75,29 @@ func jpeg(size: Int, hue: Double, keywords: [String] = []) -> Data {
                                                "subject" as CFString, .arrayUnordered, keywords as CFArray)!
         CGImageMetadataSetTagWithPath(metadata, nil, "dc:subject" as CFString, subject)
     }
+    if let place {
+        CGImageMetadataSetValueWithPath(metadata, nil, "exif:GPSLatitude" as CFString,
+                                        xmpCoordinate(place.lat, "N", "S") as CFString)
+        CGImageMetadataSetValueWithPath(metadata, nil, "exif:GPSLongitude" as CFString,
+                                        xmpCoordinate(place.lon, "E", "W") as CFString)
+    }
     CGImageDestinationAddImageAndMetadata(dest, ctx.makeImage()!, metadata,
                                           [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
     CGImageDestinationFinalize(dest)
     return data as Data
 }
 
-func video(_ url: URL, seconds: Int, type: AVFileType) async throws {
+func video(_ url: URL, seconds: Int, type: AVFileType, iso6709: String? = nil) async throws {
     try? FileManager.default.removeItem(at: url)
     let writer = try AVAssetWriter(outputURL: url, fileType: type)
+    if let iso6709 {
+        // Where it was filmed, as phones record it.
+        let item = AVMutableMetadataItem()
+        item.identifier = .quickTimeMetadataLocationISO6709
+        item.value = iso6709 as NSString
+        item.dataType = kCMMetadataBaseDataType_UTF8 as String
+        writer.metadata = [item]
+    }
     let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
         AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 640, AVVideoHeightKey: 480,
     ])
@@ -105,13 +142,14 @@ for i in 0..<photoCount {
     let folder = folders[i % folders.count]
     let size = [400, 800, 1600, 2400][i % 4]
     let url = out.appendingPathComponent(folder).appendingPathComponent(String(format: "IMG_%04d.jpg", 1000 + i))
-    try jpeg(size: size, hue: Double((i * 37) % 100) / 100, keywords: keywords(for: i)).write(to: url)
+    try jpeg(size: size, hue: Double((i * 37) % 100) / 100, keywords: keywords(for: i), place: place(for: i)).write(to: url)
 }
 try await video(out.appendingPathComponent("2021/trip/clip.mp4"), seconds: 6, type: .mp4)
-try await video(out.appendingPathComponent("2020/short.mov"), seconds: 2, type: .mov)
+try await video(out.appendingPathComponent("2020/short.mov"), seconds: 2, type: .mov, iso6709: "+37.8199-122.4783/")
 // Plausible name, unplayable contents: the app must badge it, not choke on it.
 try Data(repeating: 0x1A, count: 50_000).write(to: out.appendingPathComponent("2020/unsupported.mkv"))
 
 let tagged = (0..<photoCount).filter { !keywords(for: $0).isEmpty }.count
 let sky = (0..<photoCount).filter { keywords(for: $0).contains("Sky") }.count
-print("photos=\(photoCount) videos=2 unsupported=1 tagged=\(tagged) sky=\(sky)")
+let located = (0..<photoCount).filter { place(for: $0) != nil }.count + 1   // and short.mov
+print("photos=\(photoCount) videos=2 unsupported=1 tagged=\(tagged) sky=\(sky) located=\(located)")

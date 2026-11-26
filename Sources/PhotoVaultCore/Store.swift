@@ -108,7 +108,51 @@ public actor Store {
         }
         try await refreshDetails(progress: progress)
         try await refreshTags(progress: progress)
+        try await refreshLocations(progress: progress)
         progress?(ScanProgress(phase: "Up to date", done: 0, total: 0, finished: true))
+    }
+
+    /// Reads where each photo and video was taken, for any whose file is new
+    /// or has changed since — every one, the first time a vault from before
+    /// catalog version 7 is scanned. New files are mostly done already, by
+    /// the thumbnailer. Header reads, a few at a time; committed 200 at a
+    /// time, so a stopped scan keeps what it read.
+    func refreshLocations(progress: (@Sendable (ScanProgress) -> Void)?) async throws {
+        let pending = try catalog.photosNeedingLocation()
+        guard !pending.isEmpty else { return }
+        progress?(ScanProgress(phase: "Reading locations…", done: 0, total: pending.count))
+        let root = self.root
+        let window = max(4, ProcessInfo.processInfo.activeProcessorCount)
+        var done = 0
+        for start in stride(from: 0, to: pending.count, by: 200) {
+            try Task.checkCancellation()
+            let batch = Array(pending[start..<min(start + 200, pending.count)])
+            let read = await withTaskGroup(of: (Int, FileLocation?).self) { group in
+                var next = 0
+                func addNext() {
+                    guard next < batch.count else { return }
+                    let (i, item) = (next, batch[next])
+                    next += 1
+                    group.addTask { (i, await LocationReader.read(url: root.appendingPathComponent(item.relPath), type: item.mediaType)) }
+                }
+                for _ in 0..<min(window, batch.count) { addNext() }
+                var out = [FileLocation?](repeating: nil, count: batch.count)
+                for await (i, location) in group {
+                    out[i] = location
+                    addNext()
+                }
+                return out
+            }
+            try catalog.transaction {
+                // An unreadable file, or one that records no place, is noted
+                // as read too, so it isn't retried on every scan.
+                for (item, location) in zip(batch, read) {
+                    try catalog.setLocation(photoID: item.id, location, fileMtime: item.mtime)
+                }
+            }
+            done += batch.count
+            progress?(ScanProgress(phase: "Reading locations…", done: done, total: pending.count))
+        }
     }
 
     /// Reads the keywords and PhotoVault records of every photo that's new, or
@@ -342,6 +386,7 @@ public actor Store {
             if let t = thumb.posterTime {
                 try catalog.setPosterTime(photoID: item.id, t)
             }
+            try catalog.setLocation(photoID: item.id, thumb.location, fileMtime: item.mtime)
         }
     }
 
@@ -415,6 +460,15 @@ public actor Store {
     public func photoCount() throws -> Int { try catalog.photoCount() }
     public func photo(id: Int64) throws -> PhotoItem? { try catalog.photo(id: id) }
 
+    // MARK: - Locations
+
+    /// Where the photos in a view were taken, for the map.
+    public func locations(scope: LibraryScope, filter: MediaFilter, groups: TagGroups = TagGroups(text: ""),
+                          subfolders: Bool = true) throws -> [MapPoint] {
+        try catalog.locations(scope: scope, filter: filter, groups: groups, subfolders: subfolders)
+    }
+    public func location(for id: Int64) throws -> FileLocation? { try catalog.location(photoID: id) }
+
     // MARK: - Tags
 
     public func tagCounts() throws -> [TagCount] { try catalog.tagCounts() }
@@ -456,7 +510,9 @@ public actor Store {
     /// A deleted album's sort and place go with it, so a later album with the
     /// same id starts afresh.
     private func forgetViewSettings(_ scope: LibraryScope) {
-        for key in [scope.sortKey + ".order", scope.sortKey + ".ascending", scope.sortKey + ".seed"]
+        // Its sort, its places, and whether it was a map and where.
+        for key in [scope.sortKey + ".order", scope.sortKey + ".ascending", scope.sortKey + ".seed",
+                    "map." + scope.storageValue, "map.camera." + scope.storageValue]
             + MediaFilter.allCases.map(scope.placeKey) {
             try? catalog.deleteMeta("setting." + key)
         }

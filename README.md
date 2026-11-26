@@ -18,14 +18,20 @@ window state in your home folder, and it never connects to the internet.
   date created, file name, video length or at random, either way round. Every
   view opens where you left it, and PhotoVault opens on the view you were last
   in. The grid can scroll by itself at a speed you choose.
+- **A map** of where each view's photos and videos were taken, from the
+  locations phones record: nearby photos gather into circles with a count,
+  and close in they show as thumbnails; terrain shading shows whether they
+  were taken in the mountains. It's drawn on your Mac from a world map that
+  comes with PhotoVault (Natural Earth, public domain), so nothing is
+  downloaded and no location leaves the Mac.
 - **Organize the files themselves**: drag photos onto a folder in the sidebar
   to move them there (instantly, keeping their favorites, albums and tags), or
   onto an album to add them. Undo Move puts them back.
 - **Albums, favorites and smart albums.** Smart albums pick their photos from
   tag rules: include or exclude tags, match any or all. Drag albums into the
   order you want, duplicate them, and sort each one its own way.
-- **Automatic tags from JoyTag**, which
-  names what's in a picture (5,813 tags) and runs on your Mac, from the
+- **Automatic tags from SigLIP 2 or JoyTag**, your choice when installing:
+  a model that names what's in a picture and runs on your Mac, from the
   thumbnails PhotoVault already keeps. Tags are kept in the vault's catalog:
   your photos are never rewritten. Tags are grouped under everyday names in an
   editable text file in the vault (`.Tag Groups.txt`).
@@ -59,12 +65,12 @@ window state in your home folder, and it never connects to the internet.
    it for malicious software: open **System Settings › Privacy & Security** and
    click **Open Anyway**. (The app is not notarized by Apple.)
 3. Choose one:
-   - **Create a New Vault** — a new disk image, with PhotoVault, JoyTag and an
+   - **Create a New Vault** — a new disk image, with PhotoVault, a tagging model and an
      empty Photos folder. Choose its name, where to save it, and the most it
      can hold (it only takes the space its photos use). It can be protected
      with a password: then nobody can open it without one — and a forgotten
-     password can't be recovered. Untick **Include photo tagging** to leave
-     JoyTag out and save about 370 MB; PhotoVault then doesn't tag photos.
+     password can't be recovered. **Tagging** chooses the model: SigLIP 2 (the
+     default), JoyTag, or None to save about 360 MB; PhotoVault then doesn't tag photos.
    - **Install on an Existing Vault** — puts this version of PhotoVault on a
      vault you have. Its photos, albums and tags stay as they are.
 
@@ -118,7 +124,16 @@ Scripts/joytag/convert.sh --vault "/Volumes/<the same vault>"
 Scripts/joytag/package.sh
 ```
 
-Then build the installer, which carries PhotoVault and JoyTag:
+SigLIP 2 the same way, from its pinned Hugging Face revision:
+
+```bash
+Scripts/siglip/fetch.sh
+Scripts/siglip/convert.sh
+Scripts/siglip/evaluate.sh --vault "/Volumes/<a vault with photos>"
+Scripts/siglip/package.sh
+```
+
+Then build the installer, which carries PhotoVault and both models:
 
 ```bash
 Scripts/build-installer.sh --from-source

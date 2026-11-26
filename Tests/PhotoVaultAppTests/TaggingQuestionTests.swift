@@ -31,6 +31,17 @@ struct TaggingQuestionTests {
         #expect(q.message.contains("It takes less than a minute."))
     }
 
+    @Test func bothTaggersAreNamed() {
+        let q = LibraryModel.question(ids: nil, plan: Store.ClassifyPlan(photos: 500), secondsPerPhoto: 0.3,
+                                      prefixes: [JoyTag.prefix, SigLIP.prefix])
+        #expect(q.title == "Tag 500 photos with JoyTag and SigLIP 2?")
+        #expect(q.message.hasPrefix("JoyTag and SigLIP 2 look at each photo and name what they see. Their tags"))
+        #expect(q.prefixes == ["jt", "sg"])
+        let r = LibraryModel.question(ids: [1], plan: Store.ClassifyPlan(photos: 101), secondsPerPhoto: 0.15, prefixes: [SigLIP.prefix])
+        #expect(r.title == "Re-tag 101 photos with SigLIP 2?")
+        #expect(r.message.contains("Their SigLIP 2 tags are replaced"))
+    }
+
     @Test func timesReadNaturally() {
         #expect(LibraryModel.roughly(30) == "less than a minute")
         #expect(LibraryModel.roughly(61) == "about a minute")

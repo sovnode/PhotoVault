@@ -6,6 +6,33 @@ major version changes how vaults are stored.
 
 ## [Unreleased]
 
+- **A map** of where a view's photos and videos were taken: Grid | Map in
+  the toolbar, or View › Show as Map (⇧⌘M). Nearby photos gather into
+  circles with a count; close in, photos show as thumbnails. Click one to
+  see its photos in a panel beside it, which scrolls when there are many;
+  click a photo there to show it in the library. Terrain shading shows
+  where the land rises. Drawn on your Mac from a world map and shaded relief
+  that come with PhotoVault (Natural Earth, public domain): nothing is
+  downloaded, and no location is sent anywhere. Coastlines, borders, place
+  names and hills, no streets.
+- **Show on Map** in the properties panel, which now shows a video's
+  location too.
+- The catalog records where each photo and video was taken, when the file
+  says so (GPS in a photo, the location in a movie). A vault from before
+  reads them once, on its next scan. Nothing is written into the photos.
+- Fixed: the properties panel showed 0° 0° as the coordinates of a photo
+  whose camera had no fix.
+- **SigLIP 2**, a tagging model for real photos and videos: 900 everyday
+  tags (people and what they're doing, animals, food, places, landscapes,
+  weather, vehicles). Runs on your Mac without the internet; its tags are kept
+  in the vault's catalog. The first run on a vault looks at up to 400 of its
+  photos to learn what's usual for each tag there.
+- **The installer's Tagging menu**: SigLIP 2 (the default), JoyTag or None,
+  one model per vault. Installing with another chosen takes the old one off
+  and keeps the tags it made. A SigLIP 2 vault has no Show R18 Tags.
+- Fixed: a photo's tags from PhotoVault's taggers were lost when its file was
+  read again, unless they were JoyTag's.
+
 ## [1.8.0] — 2026-10-23
 
 - **A user manual** in the app: Help › PhotoVault User Manual (⌘?). Nine

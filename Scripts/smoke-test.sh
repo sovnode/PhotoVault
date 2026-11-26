@@ -148,6 +148,7 @@ VIDEOS=$(printf '%s' "$SUMMARY" | sed -n 's/.*videos=\([0-9]*\).*/\1/p')
 UNSUPPORTED=$(printf '%s' "$SUMMARY" | sed -n 's/.*unsupported=\([0-9]*\).*/\1/p')
 TAGGED=$(printf '%s' "$SUMMARY" | sed -n 's/.*tagged=\([0-9]*\).*/\1/p')
 SKY=$(printf '%s' "$SUMMARY" | sed -n 's/.*sky=\([0-9]*\).*/\1/p')
+LOCATED=$(printf '%s' "$SUMMARY" | sed -n 's/.*located=\([0-9]*\).*/\1/p')
 [ -n "$PHOTOS" ] && pass "generated $PHOTOS photos, $VIDEOS videos, $UNSUPPORTED unsupported file" \
     || { fail "generate test media: $SUMMARY"; exit 1; }
 TOTAL=$((PHOTOS + VIDEOS + UNSUPPORTED))
@@ -188,6 +189,13 @@ else
     fail "keywords already in photos read into the catalog (got $(sql "SELECT COUNT(DISTINCT photo_id) FROM tag;") of $TAGGED)"
 fi
 expect "tags merge regardless of case (Sky = sky)" "$(sql "SELECT COUNT(*) FROM tag WHERE key = 'sky' AND name = 'Sky';")" "$SKY"
+# Locations come with the thumbnails, or in the pass after the tags.
+if wait_for 30 "SELECT COUNT(*) FROM photo WHERE latitude IS NOT NULL;" "$LOCATED"; then
+    pass "where $LOCATED photos and videos were taken read into the catalog"
+else
+    fail "where photos and videos were taken read into the catalog (got $(sql "SELECT COUNT(*) FROM photo WHERE latitude IS NOT NULL;") of $LOCATED)"
+fi
+expect "every file's location read once, found or not" "$(sql "SELECT COUNT(*) FROM photo WHERE location_read IS NULL AND missing = 0 AND trashed = 0;")" "0"
 [ -f "$MOUNT/.Tag Groups.txt" ] && [ ! -e "$MOUNT/Tag Groups.txt" ] && pass ".Tag Groups.txt installed in the vault, hidden, to be edited" || fail ".Tag Groups.txt installed in the vault, hidden"
 expect "unplayable container badged, not dropped" "$(sql "SELECT COUNT(*) FROM photo WHERE playable = 0;")" "$UNSUPPORTED"
 expect "thumbnail pack ends exactly where the catalog says" \
@@ -433,6 +441,50 @@ else
     echo "JoyTag: skipped — not packaged in this checkout (Scripts/joytag/package.sh)"
 fi
 
+# ------------------------------------------------------------------ SigLIP 2
+
+# The second tagger: its own tags beside JoyTag's, in the catalog, nothing in
+# the photos changed. Taken off the vault again afterwards, so the launches
+# below run as they did before it.
+sg_count() { sql "SELECT COUNT(*) FROM classification WHERE classifier = 'sg';"; }
+if [ -f tools/siglip/package/SigLIP2/manifest.json ]; then
+    echo "SigLIP 2 launch: installed beside JoyTag, every photo tagged"
+    BEFORE_SUMS="$(checksums)"
+    JT_BEFORE=$(sql "SELECT COUNT(*) FROM tag WHERE source = 'jt';")
+    OUTSIDE_SG="$(outside_state)"
+    Scripts/siglip/install.sh "$MOUNT" >/dev/null && [ -f "$MOUNT/.catalog/models/SigLIP2/manifest.json" ] \
+        && pass "SigLIP 2 installed in the vault's .catalog/models" || fail "SigLIP 2 installed in the vault's .catalog/models"
+    TAGGABLE=$(sql "SELECT COUNT(*) FROM photo WHERE missing = 0 AND trashed = 0 AND thumb_off IS NOT NULL;")
+    launch
+    if wait_for 240 "SELECT COUNT(*) FROM classification WHERE classifier = 'sg';" "$TAGGABLE"; then
+        pass "SigLIP 2 tagged every photo and video ($TAGGABLE)"
+    else
+        fail "SigLIP 2 tagged every photo and video (got $(sg_count) of $TAGGABLE)"
+    fi
+    expect "kept in the catalog, under SigLIP 2" \
+        "$(sql "SELECT COUNT(*) FROM classification WHERE classifier = 'sg' AND in_file = 0 AND label = 'SigLIP 2';")" "$TAGGABLE"
+    expect "each SigLIP 2 tag with its score" "$(sql "SELECT COUNT(*) FROM tag WHERE source = 'sg' AND confidence IS NULL;")" "0"
+    expect "JoyTag's tags left as they were" "$(sql "SELECT COUNT(*) FROM tag WHERE source = 'jt';")" "$JT_BEFORE"
+    CAL=$(sql "SELECT COUNT(*) FROM meta WHERE key = 'setting.siglip.calibration';")
+    if [ "$TAGGABLE" -ge 60 ]; then
+        expect "the vault calibrated, in its own catalog" "$CAL" "1"
+    else
+        expect "too few photos to calibrate: none made" "$CAL" "0"
+    fi
+    if stop_app; then pass "quit promptly after SigLIP 2"; else fail "quit promptly after SigLIP 2"; fi
+    expect "every photo and video byte for byte as it was (SigLIP 2)" "$(checksums)" "$BEFORE_SUMS"
+    sleep 2
+    OUTSIDE_AFTER="$(outside_state)"
+    if [ "$OUTSIDE_AFTER" = "$OUTSIDE_SG" ]; then
+        pass "nothing written outside the vault while SigLIP 2 tagged"
+    else
+        fail "nothing written outside the vault while SigLIP 2 tagged — changed: $(printf '%s\n' "$OUTSIDE_AFTER" | grep -vxF "$OUTSIDE_SG" | cut -d' ' -f1 | tr '\n' ' ')"
+    fi
+    rm -rf "$MOUNT/.catalog/models/SigLIP2"
+else
+    echo "SigLIP 2: skipped — not packaged in this checkout (Scripts/siglip/package.sh)"
+fi
+
 # ------------------------------------------------------------------ places and playback
 
 echo "Last launch: each view keeps its place; Repeat, Play Next, one speed, a slideshow"
@@ -521,6 +573,48 @@ if stop_app; then pass "quit promptly"; else fail "quit promptly"; fi
 expect "nothing is left locked in the vault" "$(find "$MOUNT/Photos" -flags uchg | wc -l | tr -d ' ')" "0"
 
 # ------------------------------------------------------------------ opening where it was left
+
+# ------------------------------------------------------------------ the map
+
+echo "The map: drawn from the app's own world outline, with no network"
+# Never MapKit, nor anything that could fetch a map: nothing that speaks to
+# the network is linked at all.
+LINKED="$(otool -L "$MOUNT/PhotoVault.app/Contents/MacOS/PhotoVault" | grep -E -i 'MapKit|CFNetwork|/Network\.framework|CoreLocation' | tr -d '\t')"
+[ -z "$LINKED" ] && pass "links no MapKit, CFNetwork, Network or CoreLocation" || fail "links no network or map frameworks (found: $LINKED)"
+[ -s "$MOUNT/PhotoVault.app/Contents/Resources/World Map.pvmap" ] && pass "the world outline comes with the app" || fail "the world outline comes with the app"
+[ -s "$MOUNT/PhotoVault.app/Contents/Resources/World Relief.pvrelief" ] && pass "the terrain shading comes with the app" || fail "the terrain shading comes with the app"
+# Earlier launches added photos: what All Media holds with a location now.
+ON_MAP="$(sql "SELECT COUNT(*) FROM photo WHERE latitude IS NOT NULL AND missing = 0 AND trashed = 0;")"
+MARK=$(wc -l < "$WORK/app.log" | tr -d ' ')
+launch PHOTOVAULT_SMOKE_MAP=1
+t=0
+while ! tail -n +$((MARK + 1)) "$WORK/app.log" | grep -q "smoke: map idle"; do
+    [ "$t" -ge 60 ] && break
+    sleep 1; t=$((t + 1))
+done
+LOG="$(tail -n +$((MARK + 1)) "$WORK/app.log")"
+said() { printf '%s\n' "$LOG" | sed -n "s/^smoke: $1/\\1/p" | head -1; }
+expect "All Media as a map holds every photo and video with a location" "$(said 'map: \([0-9]*\) of.*')" "$ON_MAP"
+MARKERS="$(said 'map: .*; \([0-9]*\) markers.*')"; HELD="$(said 'map: .* markers holding \([0-9]*\).*')"; TILES="$(said 'map: .*, \([0-9]*\) tiles')"
+[ "${MARKERS:-0}" -gt 0 ] && [ "${MARKERS:-0}" -lt "$ON_MAP" ] && pass "nearby photos gather into circles ($ON_MAP in $MARKERS markers)" \
+    || fail "nearby photos gather into circles (got '$MARKERS' markers for $ON_MAP)"
+expect "fitted to the view, every one of them is on screen" "$HELD" "$ON_MAP"
+[ "${TILES:-0}" -gt 0 ] && pass "the world outline is drawn ($TILES tiles)" || fail "the world outline is drawn (got '$TILES' tiles)"
+SOCKETS="$(lsof -a -i -p "$PID" 2>/dev/null | tail -n +2 | wc -l | tr -d ' ')"
+expect "no network connection with the map open" "$SOCKETS" "0"
+CPU=$(idle_cpu_percent)
+[ "$CPU" -lt 10 ] && pass "idle with the map open (${CPU}% CPU)" || fail "idle with the map open (${CPU}% CPU — a redraw loop?)"
+t=0
+while ! tail -n +$((MARK + 1)) "$WORK/app.log" | grep -q "smoke: map click"; do
+    [ "$t" -ge 30 ] && break
+    sleep 1; t=$((t + 1))
+done
+LOG="$(tail -n +$((MARK + 1)) "$WORK/app.log")"
+expect "a folder never shown as a map is still a grid" "$(said 'map per view: a folder is a grid: \([a-z]*\).*')" "yes"
+expect "All Media comes back as the map, where it was left" "$(said 'map per view: .*where it was: \([a-z]*\)')" "yes"
+expect "clicking a photo on the map shows it in the library, selected" "$(said 'map click: \(.*\)')" "shown in the grid, selected"
+if stop_app; then pass "quit promptly"; else fail "quit promptly"; fi
+expect "the map's place is kept in the vault's catalog" "$(sql "SELECT COUNT(*) FROM meta WHERE key = 'setting.map.camera.all';")" "1"
 
 echo "Opening where it was left: a folder, only photos, a photo open"
 MARK=$(wc -l < "$WORK/app.log" | tr -d ' ')

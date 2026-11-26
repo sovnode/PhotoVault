@@ -1,7 +1,7 @@
 #!/bin/sh
 # Creates a new PhotoVault sparse bundle, mounts it, and installs the app.
 #
-# Usage: Scripts/new-vault.sh <bundle-path> [size] [--without-joytag]
+# Usage: Scripts/new-vault.sh <bundle-path> [size] [--tagging siglip|joytag|none] [--without-joytag]
 #
 #   Scripts/new-vault.sh ~/PhotoVault.sparsebundle
 #   Scripts/new-vault.sh ~/Archive.sparsebundle 200g
@@ -16,17 +16,21 @@ cd "$(dirname "$0")/.."
 
 BUNDLE=""
 SIZE=""
-WITH_JOYTAG=1
+TAGGING=siglip
+NEXT=""
 for arg in "$@"; do
+    if [ "$NEXT" = tagging ]; then TAGGING="$arg"; NEXT=""; continue; fi
     case "$arg" in
-        --without-joytag) WITH_JOYTAG=0 ;;
+        --without-joytag) TAGGING=none ;;
+        --tagging) NEXT=tagging ;;
+        --tagging=*) TAGGING="${arg#--tagging=}" ;;
         *) if [ -z "$BUNDLE" ]; then BUNDLE="$arg"; elif [ -z "$SIZE" ]; then SIZE="$arg"; fi ;;
     esac
 done
 SIZE="${SIZE:-500g}"
 
 if [ -z "$BUNDLE" ]; then
-    echo "usage: Scripts/new-vault.sh <bundle-path> [size] [--without-joytag]" >&2
+    echo "usage: Scripts/new-vault.sh <bundle-path> [size] [--tagging siglip|joytag|none]" >&2
     echo "example: Scripts/new-vault.sh ~/PhotoVault.sparsebundle 500g" >&2
     exit 64
 fi
@@ -78,9 +82,7 @@ mkdir -p "$MOUNT/Photos"
 : > "$MOUNT/.metadata_never_index"
 
 Scripts/build-app.sh "$MOUNT"
-if [ "$WITH_JOYTAG" = "1" ]; then
-    Scripts/joytag/install.sh "$MOUNT"
-fi
+Scripts/install-tagger.sh "$MOUNT" "$TAGGING"
 
 echo
 echo "Vault ready."

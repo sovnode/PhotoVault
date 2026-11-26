@@ -164,7 +164,29 @@ struct TagGroupsTests {
         #expect(groups.groups(of: "interracial") == ["People"])
         #expect(groups.groups(of: "hatsune miku") == ["Anime and games"])
         #expect(groups.groups(of: "cat ears") == ["Fantasy and sci-fi"])
-        #expect(groups.members.values.reduce(0) { $0 + $1.count } == 5_813)
+        // JoyTag's 5,813, and SigLIP 2's where its group doesn't list them already.
+        #expect(groups.members.values.reduce(0) { $0 + $1.count } == 5_813 + 655)
+        #expect(groups.groups(of: "man") == ["People"])
+        #expect(groups.groups(of: "hiking trail") == ["Nature and outdoors"])
+    }
+
+    /// Every one of SigLIP 2's tags is in a group, and the same group as in its
+    /// tag list.
+    @Test func everySigLIPTagHasItsGroup() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let groups = try TagGroups(url: root.appendingPathComponent("Resources/Tag Groups.txt"))
+        let vocabulary = try TagGroups(text: String(contentsOf: root.appendingPathComponent("Scripts/siglip/vocabulary.txt"), encoding: .utf8)
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.split(separator: "=", maxSplits: 1).first.map(String.init) ?? "" }
+            .joined(separator: "\n"))
+        var count = 0
+        for name in vocabulary.names {
+            for key in vocabulary.members[name] ?? [] {
+                #expect(groups.groups(of: key).contains(name), "\(key) under \(name)")
+                count += 1
+            }
+        }
+        #expect(count == 900)
     }
 
     /// R18 tags stay out of sight unless asked for; a smart album already
@@ -246,6 +268,28 @@ struct CatalogTagTests {
         }
         #expect(Set(try catalog.tags(photoID: id).map { "\($0.source)|\($0.name)" }) == ["jt|cat", "manual|pet"])
         #expect(try catalog.classifications(photoID: id).first?.inFile == false, "the catalog-only record stays")
+    }
+
+    @Test func siglipTagsSurviveAReReadAndArentTakenForKeywordMarks() throws {
+        let catalog = try Catalog(url: vault.catalogFile)
+        defer { catalog.closeCleanly() }
+        let id = try catalog.upsertPhoto(PhotoItem(relPath: "Photos/a.jpg", mtime: 10))
+        let sg = ToolRecord(prefix: SigLIP.prefix, tool: SigLIP.tool, version: "abc1234-t1", date: Date(timeIntervalSince1970: 100))
+        try catalog.transaction {
+            try catalog.setCatalogOnlyTags(photoID: id, record: sg, [ScoredTag(name: "beach", score: 0.6)])
+        }
+        // The file's own keywords change, and one of them is "beach" too.
+        try catalog.transaction {
+            try catalog.setFileTags(photoID: id, tags: TagSources.split(FileTags(keywords: ["beach", "holiday"])),
+                                    records: [], fileMtime: 11)
+        }
+        #expect(Set(try catalog.tags(photoID: id).map { "\($0.source)|\($0.name)" })
+                == ["sg|beach", "manual|beach", "manual|holiday"])
+        #expect(try catalog.classifications(photoID: id).map(\.classifier) == ["sg"])
+    }
+
+    @Test func siglipsPrefixCantBeClaimed() {
+        #expect(throws: VaultError.self) { try KeywordPrefixer(prefix: "sg", label: "Other") }
     }
 
     @Test func countsMergeAcrossSourcesAndSkipTrashedAndMissing() throws {

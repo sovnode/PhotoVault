@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds PhotoVault Installer, the app the public downloads. It makes a new
-# vault, or puts PhotoVault on an existing one, with JoyTag in every one — what
+# vault, or puts PhotoVault on an existing one, with the tagging model chosen — what
 # new-vault.sh and install-to-vault.sh do, for someone without this project.
 #
 # Usage: Scripts/build-installer.sh [release.zip | --from-source]
@@ -14,11 +14,14 @@
 # it installs is exactly a released build. --from-source is for trying out
 # changes before a release; its zip is named after the commit, not a version.
 #
-# JoyTag isn't optional: the build stops without tools/joytag/package/JoyTag
-# (Scripts/joytag/package.sh) and its licence. About 370 MB of the installer.
+# It carries both tagging models, SigLIP 2 and JoyTag; each vault gets the one
+# chosen, or none. The build stops without tools/siglip/package/SigLIP2
+# (Scripts/siglip/package.sh) or tools/joytag/package/JoyTag
+# (Scripts/joytag/package.sh), each with its licence. About 725 MB of the
+# installer.
 #
 # Nothing personal goes in. It's built only from the app, two texts from
-# Resources/ and JoyTag — never from a vault — and every file is checked for any
+# Resources/ and the two models — never from a vault — and every file is checked for any
 # trace of the Mac it was built on (Scripts/check-no-personal-data.sh): a build
 # that holds one stops. Releases cut before 1.4.0 hold this Mac's paths, so they
 # can't be packaged.
@@ -95,6 +98,20 @@ done
 ditto --noextattr --noqtn "$JOYTAG" "$STAGE/JoyTag"
 JOYTAG_VERSION="$(sed -n 's/.*"version": "\([^"]*\)".*/\1/p' "$STAGE/JoyTag/manifest.json")"
 
+# ---------------------------------------------------------------- SigLIP 2
+
+# The installer's default tagger; each vault gets one of the two, or none.
+SIGLIP="tools/siglip/package/SigLIP2"
+for f in manifest.json tags.txt text_embeddings.f32 LICENSE.txt SigLIP2.mlmodelc; do
+    [ -e "$SIGLIP/$f" ] || {
+        echo "error: $SIGLIP/$f is missing. SigLIP 2 goes into every installer: package it with" >&2
+        echo "       Scripts/siglip/fetch.sh, convert.sh, evaluate.sh, then package.sh." >&2
+        exit 1
+    }
+done
+ditto --noextattr --noqtn "$SIGLIP" "$STAGE/SigLIP2"
+SIGLIP_VERSION="$(sed -n 's/.*"version": "\([^"]*\)".*/\1/p' "$STAGE/SigLIP2/manifest.json")"
+
 if ! Scripts/check-no-personal-data.sh "$STAGE"; then
     echo "error: what the installer would carry holds a trace of this Mac (above)." >&2
     [ "$FROM_SOURCE" = 1 ] || echo "       $RELEASE was built before build-app.sh removed it: cut a new release, or use --from-source." >&2
@@ -153,5 +170,6 @@ echo
 echo "Built $APP ($(du -sh "$APP" | cut -f1 | tr -d ' '))"
 echo "  installs: PhotoVault $VERSION, from $FROM"
 echo "  JoyTag:   $JOYTAG_VERSION, with its licence"
+echo "  SigLIP 2: $SIGLIP_VERSION, with its licence"
 echo "  zip:      $ZIP ($(du -h "$ZIP" | cut -f1 | tr -d ' '))"
 echo "  sha256:   $SUM"

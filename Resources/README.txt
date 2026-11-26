@@ -92,11 +92,12 @@ shared cache in your home folder. Finder's list and column views don't. No
 code in the app can prevent this — it is entirely a matter of how you browse.
 
 
-JoyTag
-------
+Tagging models
+--------------
 
-PhotoVault's automatic tags come from JoyTag (github.com/fpgaminer/joytag),
-which lives in this vault's hidden .catalog/models/JoyTag folder with its
-licence, the Apache License 2.0. It tags photos on this Mac, without the
+PhotoVault's automatic tags come from the model chosen when it was installed:
+SigLIP 2 (huggingface.co/google/siglip2-base-patch16-256), in the vault's
+hidden .catalog/models/SigLIP2 folder, or JoyTag (github.com/fpgaminer/joytag),
+in .catalog/models/JoyTag, each with its licence, the Apache License 2.0. It tags photos on this Mac, without the
 internet, and its tags are kept in PhotoVault's catalog: nothing is written
 into your photos. It needs macOS 15 or later.

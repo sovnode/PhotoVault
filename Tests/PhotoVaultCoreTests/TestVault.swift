@@ -67,6 +67,15 @@ final class TestVault {
         return try Thumbnailer.encodeJPEG(cg)
     }
 
+    /// Takes catalog version 7's location columns out again, for a test that
+    /// makes a catalog look as an older PhotoVault left it: the upgrade adds
+    /// them, and would fail on finding them there already.
+    static let dropLocationColumns = """
+        DROP INDEX idx_photo_located;
+        ALTER TABLE photo DROP COLUMN latitude; ALTER TABLE photo DROP COLUMN longitude;
+        ALTER TABLE photo DROP COLUMN location_source; ALTER TABLE photo DROP COLUMN location_read;
+        """
+
     static func isJPEG(_ data: Data) -> Bool {
         data.count > 3 && data[0] == 0xFF && data[1] == 0xD8
     }

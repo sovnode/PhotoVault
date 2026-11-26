@@ -13,6 +13,9 @@ public struct ThumbResult: Sendable {
     public var duration: Double?
     public var posterTime: Double?
     public var playable: Bool
+    /// Where it was taken, read from the header already open for the
+    /// thumbnail, so a new file needs no second read for the map.
+    public var location: FileLocation? = nil
 }
 
 /// Produces the 512 px JPEGs that go into the pack.
@@ -95,7 +98,8 @@ public actor Thumbnailer {
             jpeg: jpeg,
             width: details.width, height: details.height, orientation: details.orientation,
             capturedAt: details.capturedAt,
-            duration: nil, posterTime: nil, playable: true
+            duration: nil, posterTime: nil, playable: true,
+            location: LocationReader.photo(source: src, properties: props)
         )
     }
 
@@ -216,7 +220,8 @@ public actor Thumbnailer {
             capturedAt: creation?.timeIntervalSince1970,
             duration: duration.isFinite ? duration : nil,
             posterTime: actual.seconds.isFinite ? actual.seconds : target,
-            playable: true
+            playable: true,
+            location: await LocationReader.video(asset: asset)
         )
     }
 }

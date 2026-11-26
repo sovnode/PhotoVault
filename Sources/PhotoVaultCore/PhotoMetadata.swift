@@ -26,7 +26,6 @@ public struct PhotoMetadata: Sendable, Equatable {
               let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any] else { return m }
         let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:]
         let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
-        let gps = props[kCGImagePropertyGPSDictionary] as? [CFString: Any] ?? [:]
 
         m.cameraMake = (tiff[kCGImagePropertyTIFFMake] as? String)?.trimmingCharacters(in: .whitespaces)
         m.cameraModel = (tiff[kCGImagePropertyTIFFModel] as? String)?.trimmingCharacters(in: .whitespaces)
@@ -35,10 +34,10 @@ public struct PhotoMetadata: Sendable, Equatable {
         m.exposureTime = exif[kCGImagePropertyExifExposureTime] as? Double
         m.iso = (exif[kCGImagePropertyExifISOSpeedRatings] as? [Int])?.first
         m.focalLength = exif[kCGImagePropertyExifFocalLength] as? Double
-        if let lat = gps[kCGImagePropertyGPSLatitude] as? Double,
-           let lon = gps[kCGImagePropertyGPSLongitude] as? Double {
-            m.latitude = (gps[kCGImagePropertyGPSLatitudeRef] as? String) == "S" ? -lat : lat
-            m.longitude = (gps[kCGImagePropertyGPSLongitudeRef] as? String) == "W" ? -lon : lon
+        // The same reading the catalog keeps for the map, so the two agree.
+        if let place = LocationReader.photo(source: src, properties: props)?.point {
+            m.latitude = place.latitude
+            m.longitude = place.longitude
         }
         return m
     }

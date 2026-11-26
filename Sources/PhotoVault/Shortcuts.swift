@@ -19,7 +19,7 @@ enum Shortcut: CaseIterable {
     case rescan, fullRescan, stop, eject
     // Library and albums
     case allMedia, photosOnly, videosOnly
-    case biggerThumbnails, smallerThumbnails, wholePhotos
+    case biggerThumbnails, smallerThumbnails, wholePhotos, mapToggle
     case sortUp, sortDown, autoScroll
     case favorite, rotateLeft, rotateRight, trash
     // Viewer
@@ -52,6 +52,7 @@ enum Shortcut: CaseIterable {
         case .biggerThumbnails: return "Bigger Thumbnails"
         case .smallerThumbnails: return "Smaller Thumbnails"
         case .wholePhotos: return "Show Whole Photos"
+        case .mapToggle: return "Show as Map / Show as Grid"
         case .sortUp: return "Sort Oldest First (A to Z), or Shuffle Again"
         case .sortDown: return "Sort Newest First (Z to A)"
         case .autoScroll: return "Scroll Automatically / Pause"
@@ -73,7 +74,7 @@ enum Shortcut: CaseIterable {
     var place: Place {
         switch self {
         case .newAlbum, .newSmartAlbum, .undoMove, .selectAll, .deselectAll, .rescan, .fullRescan, .stop, .eject: return .anywhere
-        case .allMedia, .photosOnly, .videosOnly, .biggerThumbnails, .smallerThumbnails, .wholePhotos,
+        case .allMedia, .photosOnly, .videosOnly, .biggerThumbnails, .smallerThumbnails, .wholePhotos, .mapToggle,
              .sortUp, .sortDown, .autoScroll, .favorite, .rotateLeft, .rotateRight, .trash: return .library
         case .previous, .next, .back, .properties, .repeatToggle, .playNextToggle: return .viewer
         case .duplicateAlbum, .renameAlbum: return .sidebar
@@ -95,6 +96,7 @@ enum Shortcut: CaseIterable {
         case .smallerThumbnails: return "-"
         // Not ⇧⌘W: pressed a little off, it was ⌘W, and the window closed.
         case .wholePhotos: return "0"
+        case .mapToggle: return "m"
         case .sortUp: return .upArrow
         case .sortDown: return .downArrow
         case .autoScroll: return .space
@@ -116,7 +118,7 @@ enum Shortcut: CaseIterable {
     var modifiers: EventModifiers {
         switch self {
         case .newSmartAlbum, .rescan: return [.command, .option]
-        case .deselectAll: return [.command, .shift]
+        case .deselectAll, .mapToggle: return [.command, .shift]
         case .fullRescan: return [.command, .option, .shift]
         case .sortUp, .sortDown: return [.command, .option]
         case .autoScroll, .favorite, .previous, .next, .back, .repeatToggle, .playNextToggle, .renameAlbum:

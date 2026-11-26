@@ -13,7 +13,7 @@ public final class Catalog {
     private var db: OpaquePointer?
     public let url: URL
 
-    public static let schemaVersion: Int32 = 6
+    public static let schemaVersion: Int32 = 7
 
     // MARK: - Lifecycle
 
@@ -148,6 +148,12 @@ public final class Catalog {
             }
             try exec("PRAGMA user_version = 6;")
         }
+        if current < 7 {
+            try transaction {
+                try exec(Catalog.migrationV7)
+            }
+            try exec("PRAGMA user_version = 7;")
+        }
         // The pragma is the only source of truth for what shape the file is in.
     }
 
@@ -229,6 +235,22 @@ public final class Catalog {
       SELECT COUNT(*) FROM smart_album s2
       WHERE s2.name COLLATE NOCASE < smart_album.name COLLATE NOCASE
          OR (s2.name COLLATE NOCASE = smart_album.name COLLATE NOCASE AND s2.id < smart_album.id));
+    """
+
+    /// v7: where each photo and video was taken, for the map — as the file
+    /// records it (`LocationReader`), never looked up anywhere.
+    /// - `location_source`: a `LocationSource` raw value.
+    /// - `location_read`: the file's mtime when its location was last read,
+    ///   as `tags_read` is for tags. A file that has changed since is read
+    ///   again; one that records no location is read once, and keeps none.
+    /// Nothing is filled in here: reading every file's header would hold up
+    /// opening the vault, so the scan does it, and can be stopped.
+    static let migrationV7 = """
+    ALTER TABLE photo ADD COLUMN latitude REAL;
+    ALTER TABLE photo ADD COLUMN longitude REAL;
+    ALTER TABLE photo ADD COLUMN location_source INTEGER;
+    ALTER TABLE photo ADD COLUMN location_read REAL;
+    CREATE INDEX idx_photo_located ON photo(latitude) WHERE latitude IS NOT NULL;
     """
 
     /// v5: each file's creation date, for sorting by Date Created.
@@ -659,32 +681,47 @@ public final class Catalog {
 
     // MARK: - Queries
 
-    public func items(scope: LibraryScope, filter: MediaFilter, sort: PhotoOrder = .date, ascending: Bool = true,
-                      seed: UInt64 = 0, includeMissing: Bool = false, groups: TagGroups = TagGroups(text: ""),
-                      subfolders: Bool = true) throws -> [PhotoItem] {
+    /// Which rows a view shows: what it joins, its WHERE clauses, and the
+    /// values bound to them. `items` and `locations` share it, so the map
+    /// shows exactly the photos the grid does.
+    private struct ViewQuery {
         var joins = ""
         var clauses: [String] = []
+        /// An album's id — bound first; a view with one binds no texts.
         var scopeID: Int64?
         var texts: [String] = []
+
+        var whereSQL: String { clauses.isEmpty ? "" : "WHERE " + clauses.joined(separator: " AND ") }
+
+        func bind(to stmt: OpaquePointer) {
+            if let scopeID { sqlite3_bind_int64(stmt, 1, scopeID) }
+            for (i, text) in texts.enumerated() { sqlite3_bind_text(stmt, Int32(i + 1), text, -1, SQLITE_TRANSIENT) }
+        }
+    }
+
+    /// Nil for a smart album that no longer exists: a view of nothing.
+    private func viewQuery(scope: LibraryScope, filter: MediaFilter, includeMissing: Bool, groups: TagGroups,
+                           subfolders: Bool) throws -> ViewQuery? {
+        var q = ViewQuery()
 
         switch scope {
         case .all:
             break
         case .favorites:
-            clauses.append("p.favorite = 1")
+            q.clauses.append("p.favorite = 1")
         case .album(let id):
-            joins = "JOIN album_photo ap ON ap.photo_id = p.id"
-            clauses.append("ap.album_id = ?")
-            scopeID = id
+            q.joins = "JOIN album_photo ap ON ap.photo_id = p.id"
+            q.clauses.append("ap.album_id = ?")
+            q.scopeID = id
         case .smart(let id):
-            guard let sa = try smartAlbum(id: id) else { return [] }
+            guard let sa = try smartAlbum(id: id) else { return nil }
             if let rules = sa.rules {
                 if let (clause, bindings) = rules.sql(groups: groups) {
-                    clauses.append(clause)
-                    texts += bindings
+                    q.clauses.append(clause)
+                    q.texts += bindings
                 }
             } else if !sa.predicate.isEmpty {
-                clauses.append("(\(sa.predicate))")
+                q.clauses.append("(\(sa.predicate))")
             }
         case .trash:
             break
@@ -695,28 +732,34 @@ public final class Catalog {
             // the paths under it — not a neighbour like "2019b".
             // Or, with `subfolders` off, only what's directly in it.
             if subfolders {
-                clauses.append("(p.folder = ? OR (p.folder >= ? AND p.folder < ?))")
-                texts += [path, path + "/", path + "0"]
+                q.clauses.append("(p.folder = ? OR (p.folder >= ? AND p.folder < ?))")
+                q.texts += [path, path + "/", path + "0"]
             } else {
-                clauses.append("p.folder = ?")
-                texts.append(path)
+                q.clauses.append("p.folder = ?")
+                q.texts.append(path)
             }
         }
         // The Trash shows only trashed rows; every other view shows none.
         if case .trash = scope {
-            clauses.append("p.trashed = 1")
+            q.clauses.append("p.trashed = 1")
         } else {
-            clauses.append("p.trashed = 0")
+            q.clauses.append("p.trashed = 0")
         }
 
         switch filter {
         case .all: break
-        case .photos: clauses.append("p.media_type = 0")
-        case .videos: clauses.append("p.media_type = 1")
+        case .photos: q.clauses.append("p.media_type = 0")
+        case .videos: q.clauses.append("p.media_type = 1")
         }
-        if !includeMissing { clauses.append("p.missing = 0") }
+        if !includeMissing { q.clauses.append("p.missing = 0") }
+        return q
+    }
 
-        let whereSQL = clauses.isEmpty ? "" : "WHERE " + clauses.joined(separator: " AND ")
+    public func items(scope: LibraryScope, filter: MediaFilter, sort: PhotoOrder = .date, ascending: Bool = true,
+                      seed: UInt64 = 0, includeMissing: Bool = false, groups: TagGroups = TagGroups(text: ""),
+                      subfolders: Bool = true) throws -> [PhotoItem] {
+        guard let q = try viewQuery(scope: scope, filter: filter, includeMissing: includeMissing, groups: groups,
+                                    subfolders: subfolders) else { return [] }
         // Every view follows its sort, either way round; an album can also keep
         // the order photos were added in. Ties fall back to file name, the same
         // way round; photos with no date at all come last whichever way the
@@ -733,14 +776,34 @@ public final class Catalog {
         }
         let cols = Catalog.photoColumns.split(separator: ",").map { "p.\($0.trimmingCharacters(in: .whitespaces))" }.joined(separator: ", ")
 
-        let stmt = try prepare("SELECT \(cols) FROM photo p \(joins) \(whereSQL) ORDER BY \(order);")
+        let stmt = try prepare("SELECT \(cols) FROM photo p \(q.joins) \(q.whereSQL) ORDER BY \(order);")
         defer { sqlite3_finalize(stmt) }
-        if let scopeID { sqlite3_bind_int64(stmt, 1, scopeID) }
-        for (i, text) in texts.enumerated() { sqlite3_bind_text(stmt, Int32(i + 1), text, -1, SQLITE_TRANSIENT) }
+        q.bind(to: stmt)
         var out: [PhotoItem] = []
         while sqlite3_step(stmt) == SQLITE_ROW { out.append(readPhoto(stmt)) }
         if sort == .random {
             out.sort { Shuffle.key($0.id, seed: seed) < Shuffle.key($1.id, seed: seed) }
+        }
+        return out
+    }
+
+    /// Where each photo in a view was taken, for the map: the same rows as
+    /// `items`, less those whose file records no location. In id order —
+    /// the map draws them by place, not by any sort.
+    public func locations(scope: LibraryScope, filter: MediaFilter, groups: TagGroups = TagGroups(text: ""),
+                          subfolders: Bool = true) throws -> [MapPoint] {
+        guard var q = try viewQuery(scope: scope, filter: filter, includeMissing: false, groups: groups,
+                                    subfolders: subfolders) else { return [] }
+        q.clauses.append("p.latitude IS NOT NULL AND p.longitude IS NOT NULL")
+        let stmt = try prepare("SELECT p.id, p.latitude, p.longitude, p.media_type FROM photo p \(q.joins) \(q.whereSQL) ORDER BY p.id;")
+        defer { sqlite3_finalize(stmt) }
+        q.bind(to: stmt)
+        var out: [MapPoint] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            out.append(MapPoint(id: sqlite3_column_int64(stmt, 0),
+                                point: GeoPoint(latitude: sqlite3_column_double(stmt, 1),
+                                                longitude: sqlite3_column_double(stmt, 2)),
+                                mediaType: MediaType(rawValue: Int(sqlite3_column_int(stmt, 3))) ?? .photo))
         }
         return out
     }
@@ -1071,6 +1134,68 @@ public final class Catalog {
         }
     }
 
+    // MARK: - Locations
+
+    public struct LocationReadItem: Sendable {
+        public var id: Int64
+        public var relPath: String
+        public var mtime: Double
+        public var mediaType: MediaType
+    }
+
+    /// Photos and videos whose file is new or has changed since its location
+    /// was last read. Not the Trash's: one put back is read then.
+    public func photosNeedingLocation(limit: Int = 100_000) throws -> [LocationReadItem] {
+        let stmt = try prepare("""
+            SELECT id, rel_path, mtime, media_type FROM photo
+            WHERE missing = 0 AND trashed = 0
+              AND (location_read IS NULL OR location_read != mtime)
+            ORDER BY id LIMIT ?;
+            """)
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_int(stmt, 1, Int32(limit))
+        var out: [LocationReadItem] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            out.append(LocationReadItem(id: sqlite3_column_int64(stmt, 0),
+                                        relPath: String(cString: sqlite3_column_text(stmt, 1)),
+                                        mtime: sqlite3_column_double(stmt, 2),
+                                        mediaType: MediaType(rawValue: Int(sqlite3_column_int(stmt, 3))) ?? .photo))
+        }
+        return out
+    }
+
+    /// What a file says about where it was taken — nil for nothing — and the
+    /// file mtime it was read at, so it isn't read again until the file
+    /// changes.
+    public func setLocation(photoID: Int64, _ location: FileLocation?, fileMtime: Double) throws {
+        let stmt = try prepare("""
+            UPDATE photo SET latitude = ?, longitude = ?, location_source = ?, location_read = ? WHERE id = ?;
+            """)
+        defer { sqlite3_finalize(stmt) }
+        if let location {
+            sqlite3_bind_double(stmt, 1, location.point.latitude)
+            sqlite3_bind_double(stmt, 2, location.point.longitude)
+            sqlite3_bind_int(stmt, 3, Int32(location.source.rawValue))
+        } else {
+            sqlite3_bind_null(stmt, 1)
+            sqlite3_bind_null(stmt, 2)
+            sqlite3_bind_null(stmt, 3)
+        }
+        sqlite3_bind_double(stmt, 4, fileMtime)
+        sqlite3_bind_int64(stmt, 5, photoID)
+        try step(stmt)
+    }
+
+    public func location(photoID: Int64) throws -> FileLocation? {
+        let stmt = try prepare("SELECT latitude, longitude, location_source FROM photo WHERE id = ?;")
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_int64(stmt, 1, photoID)
+        guard sqlite3_step(stmt) == SQLITE_ROW,
+              sqlite3_column_type(stmt, 0) != SQLITE_NULL, sqlite3_column_type(stmt, 1) != SQLITE_NULL else { return nil }
+        return FileLocation(point: GeoPoint(latitude: sqlite3_column_double(stmt, 0), longitude: sqlite3_column_double(stmt, 1)),
+                            source: LocationSource(rawValue: Int(sqlite3_column_int(stmt, 2))) ?? .exif)
+    }
+
     // MARK: - Tags
 
     public struct TagReadItem: Sendable {
@@ -1113,21 +1238,26 @@ public final class Catalog {
     /// hold them, survive the re-read, unless the file now carries JoyTag's own
     /// record. Call inside a transaction.
     public func setFileTags(photoID: Int64, tags: [FileTag], records: [ToolRecord], fileMtime: Double) throws {
-        let fileHasJoyTag = records.contains { $0.prefix == JoyTag.prefix }
-        let catalogOnly = try inFile(photoID: photoID, classifier: JoyTag.prefix) == false
-        let keepCatalogJoyTag = !fileHasJoyTag && catalogOnly
+        // Each of PhotoVault's own taggers (JoyTag, SigLIP 2) whose tags this
+        // photo keeps in the catalog only, and whose record the file doesn't
+        // carry: its tags survive the re-read.
+        let inFileRecords = Set(records.map(\.prefix))
+        let keep = try OwnTaggers.prefixes.filter {
+            try !inFileRecords.contains($0) && inFile(photoID: photoID, classifier: $0) == false
+        }
         // Keywords the catalog alone marks as a tool's (pv-prefix-keywords)
         // stay that tool's while they're still in the file.
         let marked = try catalogMarks(photoID: photoID)
-        let delete = try prepare("DELETE FROM tag WHERE photo_id = ? AND NOT (? AND source = 'jt');")
+        let delete = try prepare("DELETE FROM tag WHERE photo_id = ? AND source NOT IN (SELECT value FROM json_each(?));")
         defer { sqlite3_finalize(delete) }
         sqlite3_bind_int64(delete, 1, photoID)
-        sqlite3_bind_int(delete, 2, keepCatalogJoyTag ? 1 : 0)
+        let keepJSON = String(data: try JSONEncoder().encode(keep.sorted()), encoding: .utf8) ?? "[]"
+        sqlite3_bind_text(delete, 2, keepJSON, -1, SQLITE_TRANSIENT)
         try step(delete)
 
         let insert = try prepare("INSERT OR REPLACE INTO tag (photo_id, source, key, name) VALUES (?, ?, ?, ?);")
         defer { sqlite3_finalize(insert) }
-        for tag in tags where !(keepCatalogJoyTag && tag.source == JoyTag.prefix) {
+        for tag in tags where !keep.contains(tag.source) {
             let source = tag.source == FileTag.manual ? (marked[tag.key] ?? tag.source) : tag.source
             sqlite3_reset(insert)
             sqlite3_bind_int64(insert, 1, photoID)
@@ -1179,13 +1309,16 @@ public final class Catalog {
         let stmt = try prepare("""
             SELECT t.key, t.source FROM tag t
             JOIN classification c ON c.photo_id = t.photo_id AND c.classifier = t.source
-            WHERE t.photo_id = ? AND c.in_file = 0 AND t.source NOT IN ('jt', 'manual');
+            WHERE t.photo_id = ? AND c.in_file = 0 AND t.source != 'manual';
             """)
         defer { sqlite3_finalize(stmt) }
         sqlite3_bind_int64(stmt, 1, photoID)
         var out: [String: String] = [:]
         while sqlite3_step(stmt) == SQLITE_ROW {
-            out[String(cString: sqlite3_column_text(stmt, 0))] = String(cString: sqlite3_column_text(stmt, 1))
+            let source = String(cString: sqlite3_column_text(stmt, 1))
+            // PhotoVault's own taggers' tags are theirs, never marks on keywords.
+            guard !OwnTaggers.prefixes.contains(source) else { continue }
+            out[String(cString: sqlite3_column_text(stmt, 0))] = source
         }
         return out
     }

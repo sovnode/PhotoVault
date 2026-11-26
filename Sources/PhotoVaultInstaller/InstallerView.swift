@@ -187,14 +187,20 @@ struct CreateForm: View {
     }
 }
 
-/// Photo tagging: on the vault or not.
+/// Photo tagging: which model goes on the vault, or none. A plain menu, so
+/// more can be added.
 struct TaggingRow: View {
     @EnvironmentObject var model: InstallerModel
     let vault: ExistingVault?
 
     var body: some View {
         FormRow(label: "Tagging:") {
-            Toggle("Include photo tagging (JoyTag)", isOn: $model.tagging)
+            Picker("Tagging", selection: $model.tagger) {
+                ForEach(Tagger.allCases) { Text($0.title).tag($0) }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(width: 180)
             let note = model.taggingNote(for: vault)
             Note(text: note.text, kind: note.warning ? .warning : .fine)
         }

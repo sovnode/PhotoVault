@@ -25,7 +25,8 @@
 # and artist names; Fantasy and sci-fi holds magic, monsters, robots, and
 # non-human features such as animal ears and wings.
 #
-# This first version sorts every one of JoyTag's 5,813 tags.
+# This first version sorts every one of JoyTag's 5,813 tags, and SigLIP 2's 900
+# (at the end of the file).
 
 [People]
 1boy
@@ -5897,3 +5898,697 @@ wide spread legs
 wind lift
 x-ray
 you gonna get raped
+
+# SigLIP 2's tags (added 2026-11-26), under the same groups. A group listed
+# twice is one group: these join the tags listed under it above.
+
+[People]
+man
+woman
+boy
+girl
+toddler
+teenager
+elderly person
+group of people
+selfie
+group selfie
+portrait
+person
+no people
+friends
+tourists
+hiker
+cyclist
+runner
+swimmer
+skier
+snowboarder
+surfer
+climber
+fisherman
+worker
+police officer
+musician
+performer
+bride
+groom
+wedding party
+
+[Faces]
+smiling
+sunglasses
+eyes closed
+face close-up
+
+[Clothing]
+helmet
+bike helmet
+cycling jersey
+hat
+cap
+beanie
+cowboy hat
+down jacket
+wetsuit
+hiking boots
+sneakers
+sandals
+backpack
+life jacket
+high-visibility vest
+hard hat
+
+[Poses and actions]
+hiking
+cycling
+mountain biking
+road cycling
+riding a motorcycle
+kayaking
+canoeing
+paddleboarding
+rafting
+boating
+sailing
+camping
+picnic
+barbecue
+skiing
+snowboarding
+snowshoeing
+sledding
+ice skating
+rock climbing
+surfing
+skateboarding
+golfing
+playing
+shopping
+sightseeing
+taking a photo
+lying down
+posing
+hugging
+working
+gardening
+playing music
+watching
+waiting
+celebrating
+cheering
+swinging
+
+[Animals]
+puppy
+kitten
+cow
+cattle
+bull
+calf
+goat
+rooster
+goose
+swan
+turkey
+donkey
+llama
+alpaca
+deer
+elk
+moose
+black bear
+grizzly bear
+coyote
+rabbit
+chipmunk
+marmot
+raccoon
+skunk
+bison
+bighorn sheep
+mountain goat
+pronghorn
+lizard
+rattlesnake
+tortoise
+trout
+salmon
+seal
+sea lion
+otter
+pelican
+heron
+egret
+eagle
+bald eagle
+hawk
+vulture
+raven
+pigeon
+hummingbird
+woodpecker
+blue jay
+quail
+parrot
+peacock
+flamingo
+bee
+dragonfly
+insect
+giraffe
+elephant
+zebra
+gorilla
+kangaroo
+camel
+zoo
+aquarium
+pet
+wildlife
+
+[Plants and flowers]
+trees
+pine tree
+redwood
+sequoia
+oak tree
+aspen
+birch
+joshua tree
+cactus
+fallen tree
+tree stump
+fall foliage
+leaves
+fern
+lawn
+hedge
+flowers
+wildflowers
+tulip
+poppy
+lupine
+cherry blossom
+lavender
+garden
+vineyard
+orchard
+crops
+wheat
+corn field
+hay
+pumpkin
+vegetable garden
+
+[Food and drink]
+meal
+breakfast
+lunch
+dinner
+hot dog
+tacos
+burrito
+pasta
+salad
+soup
+steak
+seafood
+fish dish
+fries
+eggs
+pancakes
+donut
+birthday cake
+cookies
+pie
+oranges
+strawberries
+vegetables
+snacks
+cocktail
+soda
+juice
+smoothie
+restaurant meal
+food truck
+farmers market
+grocery store
+picnic table
+campfire cooking
+grill
+
+[Places]
+downtown
+skyline
+village
+main street
+highway
+freeway
+dirt road
+gravel road
+mountain road
+bike path
+sidewalk
+crosswalk
+intersection
+roundabout
+parking lot
+gas station
+rest area
+suspension bridge
+covered bridge
+tunnel
+dam
+cabin
+log cabin
+barn
+farm
+ranch
+farmhouse
+silo
+windmill
+wind turbine
+cathedral
+temple
+mosque
+mission
+palace
+monument
+statue
+memorial
+fountain
+lighthouse
+pier
+dock
+harbor
+marina
+boardwalk
+museum
+museum exhibit
+art gallery
+university campus
+stadium
+arena
+theater
+concert venue
+amusement park
+roller coaster
+ferris wheel
+carnival
+fairground
+playground
+park
+city park
+plaza
+market
+storefront
+mall
+cafe
+brewery
+winery
+hotel
+hotel room
+motel
+resort
+casino
+campground
+campsite
+rv park
+visitor center
+ranger station
+trailhead
+airport
+airport terminal
+bus station
+subway
+ferry terminal
+office
+factory
+power plant
+substation
+power lines
+construction site
+industrial
+mine
+oil field
+warehouse
+hospital
+cemetery
+ghost town
+historic building
+old west town
+chinatown
+neighborhood
+backyard
+front yard
+driveway
+garage
+porch
+deck
+patio
+hot tub
+hot spring
+ski resort
+ski lift
+gondola
+golf course
+tennis court
+basketball court
+baseball field
+soccer field
+race track
+rodeo
+zoo enclosure
+outdoors
+
+[Home and furniture]
+living room
+kitchen
+dining room
+bedroom
+bathroom
+fireplace
+television
+christmas tree
+holiday decorations
+string lights
+candles
+hammock
+
+[Nature and outdoors]
+viewpoint
+panorama
+mountains
+mountain range
+mountain peak
+summit
+snowy mountains
+granite
+granite dome
+canyon
+gorge
+valley
+meadow
+alpine meadow
+rolling hills
+ridge
+mountain pass
+volcano
+lava rock
+rock formation
+boulders
+arch
+hoodoo
+mesa
+butte
+badlands
+sand dunes
+salt flat
+dry lakebed
+sagebrush
+prairie
+grassland
+farmland
+pine forest
+redwood forest
+woods
+burned forest
+jungle
+trail
+hiking trail
+switchbacks
+footbridge
+creek
+stream
+rapids
+alpine lake
+mountain lake
+reservoir
+marsh
+wetland
+swamp
+glacier
+iceberg
+frozen lake
+sea
+coast
+coastline
+sandy beach
+rocky beach
+tide pools
+surf
+bay
+island
+sea cliffs
+sea stack
+rocks
+pebbles
+reflection
+national park
+wilderness
+countryside
+garden path
+campfire
+tent
+camping gear
+wildfire
+smoke plume
+
+[Sky and weather]
+clouds
+cloudy
+overcast
+storm clouds
+thunderstorm
+wet road
+mist
+haze
+smoky sky
+snowy
+ice
+frost
+icicles
+sunny
+sunbeams
+golden hour
+stars
+milky way
+city lights
+fireworks
+northern lights
+eclipse
+spring
+
+[Vehicles]
+cars
+suv
+pickup truck
+truck
+semi truck
+van
+camper van
+rv
+travel trailer
+jeep
+off-road vehicle
+atv
+classic car
+sports car
+race car
+police car
+fire truck
+ambulance
+school bus
+bus
+tractor
+farm equipment
+construction equipment
+excavator
+crane
+forklift
+scooter
+bicycles
+road bike
+mountain bike
+gravel bike
+e-bike
+bike rack
+freight train
+steam locomotive
+railroad tracks
+tram
+cable car
+airplane window
+airplane wing
+small plane
+helicopter
+hot air balloon
+sailboat
+motorboat
+ferry
+cruise ship
+kayak
+canoe
+paddleboard
+raft
+jet ski
+car interior
+dashboard
+steering wheel
+traffic
+road trip
+parked car
+license plate
+electric vehicle charging
+
+[Things]
+road sign
+trail sign
+street sign
+welcome sign
+neon sign
+billboard
+trail map
+information board
+plaque
+mailbox
+fence
+gate
+wall
+mural
+graffiti
+sculpture
+painting
+umbrella
+beach umbrella
+cooler
+tripod
+drone
+ticket
+receipt
+document
+whiteboard
+computer screen
+screenshot
+tools
+luggage
+shopping bag
+kite
+trophy
+medal
+race bib
+clock
+fire pit
+firewood
+picnic blanket
+bottle
+cup
+plate
+glasses
+watch
+jewelry
+keys
+battery
+solar panel
+generator
+electrical panel
+tank
+antenna
+cell tower
+water tower
+street light
+bike lock
+bike computer
+cash register
+
+[Sports and games]
+sports
+race
+bike race
+marathon
+finish line
+start line
+football
+soccer
+tennis
+golf
+hockey
+pickleball
+bowling
+gym
+yoga
+cards
+arcade
+pool table
+darts
+skis
+snowboard
+skateboard
+frisbee
+scoreboard
+
+[Music]
+concert
+live music
+drums
+band
+festival
+
+[Occasions]
+party
+graduation
+thanksgiving
+easter
+fourth of july
+holiday
+parade
+festival crowd
+fair
+reunion
+dinner party
+vacation
+road trip stop
+ceremony
+church service
+funeral
+
+[Text and symbols]
+text
+handwriting
+menu
+number
+calendar
+diagram
+qr code
+
+[Photo style]
+photo
+macro
+aerial view
+drone shot
+landscape photo
+panorama photo
+black and white
+old photo
+film photo
+scanned photo
+overexposed
+backlit
+low light
+long exposure
+selfie stick
+mirror selfie
+through a window
+from a car
+point of view
+handlebar view
+group photo
+candid
+posed
+screenshot image
+document photo
+food photo
+night photo
+time lapse
+video frame

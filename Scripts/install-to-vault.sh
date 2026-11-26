@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs, or reinstalls, PhotoVault.app onto a vault that already exists.
 #
-# Usage: Scripts/install-to-vault.sh <mount-point-or-sparsebundle> [release.zip] [--without-joytag]
+# Usage: Scripts/install-to-vault.sh <mount-point-or-sparsebundle> [release.zip] [--tagging siglip|joytag|none] [--without-joytag]
 #
 #   Scripts/install-to-vault.sh /Volumes/PhotoVault
 #   Scripts/install-to-vault.sh /Volumes/PhotoVault releases/PhotoVault-1.0.0.zip
@@ -19,8 +19,9 @@
 # and the run fails if the row count moved. To create a vault from nothing, use
 # new-vault.sh instead.
 #
-# JoyTag goes into .catalog/models/ too (Scripts/joytag/install.sh), unless the
-# vault already has it or --without-joytag says not to. Without it the app
+# One tagging model goes into .catalog/models/ too (Scripts/install-tagger.sh):
+# SigLIP 2 unless --tagging says joytag or none; the other is taken off.
+# --without-joytag leaves the models as they are. Without a model the app
 # works as before, minus tagging.
 
 set -e
@@ -28,10 +29,14 @@ cd "$(dirname "$0")/.."
 
 TARGET=""
 RELEASE=""
-WITH_JOYTAG=1
+TAGGING=siglip
+NEXT=""
 for arg in "$@"; do
+    if [ "$NEXT" = tagging ]; then TAGGING="$arg"; NEXT=""; continue; fi
     case "$arg" in
-        --without-joytag) WITH_JOYTAG=0 ;;
+        --without-joytag) TAGGING=keep ;;
+        --tagging) NEXT=tagging ;;
+        --tagging=*) TAGGING="${arg#--tagging=}" ;;
         *) if [ -z "$TARGET" ]; then TARGET="$arg"; elif [ -z "$RELEASE" ]; then RELEASE="$arg"; fi ;;
     esac
 done
@@ -170,10 +175,10 @@ if [ -n "$RELEASE" ]; then
 else
     Scripts/build-app.sh "$MOUNT"
 fi
-if [ "$WITH_JOYTAG" = "1" ]; then
-    Scripts/joytag/install.sh "$MOUNT"
+if [ "$TAGGING" = keep ]; then
+    echo "Tagging: left as it is (--without-joytag)"
 else
-    echo "JoyTag: left as it is (--without-joytag)"
+    Scripts/install-tagger.sh "$MOUNT" "$TAGGING"
 fi
 echo
 

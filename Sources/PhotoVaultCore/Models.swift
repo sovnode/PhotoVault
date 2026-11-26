@@ -387,6 +387,19 @@ public struct TagRules: Codable, Hashable, Sendable {
     }
 }
 
+/// A photo or video on the map: just what placing and drawing it needs.
+public struct MapPoint: Sendable, Hashable, Identifiable {
+    public var id: Int64
+    public var point: GeoPoint
+    public var mediaType: MediaType
+
+    public init(id: Int64, point: GeoPoint, mediaType: MediaType) {
+        self.id = id
+        self.point = point
+        self.mediaType = mediaType
+    }
+}
+
 /// What the grid is currently showing.
 public enum LibraryScope: Hashable, Sendable {
     case all

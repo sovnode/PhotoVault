@@ -39,9 +39,9 @@ final class InstallerModel: ObservableObject {
     @Published var mode: Mode = .create
     @Published var phase: Phase = .choosing
 
-    /// Photo tagging (JoyTag) goes on the vault. Unticked, the vault is
-    /// smaller by the model's size — and an existing vault's copy comes off.
-    @Published var tagging = true
+    /// The tagging model that goes on the vault — one, or none. Any other on
+    /// an existing vault comes off.
+    @Published var tagger = Tagger.default
 
     // A new vault
     @Published var name = "PhotoVault"
@@ -293,7 +293,7 @@ final class InstallerModel: ObservableObject {
 
     func start() {
         guard canStart, let payload else { return }
-        let tagging = tagging
+        let tagger = tagger
         var plan: [SetupStep]
         let failure: String
         let work: ((SetupStep) -> Void) throws -> SetupReport
@@ -310,7 +310,7 @@ final class InstallerModel: ObservableObject {
             plan = [.creating, .opening, .installingApp]
             work = { progress in
                 try VaultSetup.create(name: name, in: folder, size: size, payload: payload, password: password,
-                                      tagging: tagging, progress: progress)
+                                      tagger: tagger, progress: progress)
             }
         case .install:
             guard let vault = chosen else { return }
@@ -321,10 +321,10 @@ final class InstallerModel: ObservableObject {
             failure = "PhotoVault couldn't be installed"
             plan = (now.photoVaultIsOpen ? [.quitting] : []) + [.installingApp]
             work = { progress in
-                try VaultSetup.install(into: target, payload: payload, tagging: tagging, progress: progress)
+                try VaultSetup.install(into: target, payload: payload, tagger: tagger, progress: progress)
             }
         }
-        plan += (tagging ? [.installingJoyTag] : []) + [.checking]
+        plan += (tagger != .none ? [.installingJoyTag] : []) + [.checking]
         steps = plan.map { Step(step: $0) }
         phase = .working
         setCloseButtonEnabled(false)
@@ -368,21 +368,21 @@ final class InstallerModel: ObservableObject {
 
     // MARK: - Done
 
-    /// JoyTag's size, as people read it: "370 MB".
-    var tagSize: String { ByteCountFormatter.string(fromByteCount: joyTagBytes, countStyle: .file) }
+    /// A tagging model's size, as people read it: "355 MB".
+    func size(of tagger: Tagger) -> String {
+        ByteCountFormatter.string(fromByteCount: payload?.bytes(of: tagger) ?? 0, countStyle: .file)
+    }
 
-    /// What the Photo tagging box means, under it.
+    /// What the tagging choice does to the vault, under it: its size, and
+    /// what comes off. No more: it's a plain choice.
     func taggingNote(for vault: ExistingVault?) -> (text: String, warning: Bool) {
-        if tagging {
-            if let vault, vault.joyTagVersion != nil {
-                return ("JoyTag names what's in each photo, for smart albums. It's on this vault already.", false)
-            }
-            return ("JoyTag names what's in each photo, for smart albums. It takes \(tagSize) on the vault.", false)
+        let leaving = Tagger.models.filter { $0 != tagger && vault?.version(of: $0) != nil }
+        let off = leaving.map { "\($0.title) will be taken off this vault, freeing \(size(of: $0)). Tags it made are kept." }
+        if tagger == .none {
+            return ((off + ["PhotoVault won't tag photos."]).joined(separator: " "), true)
         }
-        if let vault, vault.joyTagVersion != nil {
-            return ("JoyTag will be taken off this vault, freeing \(tagSize). PhotoVault won't tag new photos; tags it already made are kept. Install again with this ticked to bring it back.", true)
-        }
-        return ("Saves \(tagSize). PhotoVault won't tag photos, so smart albums can't pick photos by what's in them. Install again with this ticked to add it later.", true)
+        let on = vault?.version(of: tagger) != nil ? "It's on this vault already." : "It takes \(size(of: tagger)) on the vault."
+        return (([on] + off).joined(separator: " "), !off.isEmpty)
     }
 
     func doneTitle(_ report: SetupReport) -> String {
@@ -409,8 +409,10 @@ final class InstallerModel: ObservableObject {
             lines.append("Its Tag Groups.txt is hidden now, as .Tag Groups.txt. To edit it, show hidden files in Finder: press ⇧⌘ and the full stop key.")
         }
         if report.quitPhotoVault { lines.append("PhotoVault was quit to install. Open it again to carry on.") }
-        if case .removed = report.joyTag {
-            lines.append("Photo tagging was taken off the vault, freeing \(tagSize). Tags it already made are kept, and smart albums using them still work.")
+        for model in Tagger.models {
+            if case .removed = report.change(for: model) {
+                lines.append("\(model.title) was taken off the vault, freeing \(size(of: model)). Tags it already made are kept, and smart albums using them still work.")
+            }
         }
         lines.append("Its photos, albums and tags are as they were.")
         return lines

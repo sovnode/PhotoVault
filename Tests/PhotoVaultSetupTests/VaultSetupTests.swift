@@ -12,7 +12,7 @@ struct VaultSetupTests {
         let scratch = try Scratch()
         let payload = try scratch.payload(version: "1.3.0")
         var steps: [SetupStep] = []
-        let report = try VaultSetup.create(name: "Test Vault", in: scratch.root, size: "100m", payload: payload,
+        let report = try VaultSetup.create(name: "Test Vault", in: scratch.root, size: "100m", payload: payload, tagger: .joyTag,
                                            mountRoot: scratch.mountRoot) { steps.append($0) }
         let mount = report.mountPoint
         #expect(steps == [.creating, .opening, .installingApp, .installingJoyTag, .checking])
@@ -51,7 +51,7 @@ struct VaultSetupTests {
 
         // A second with the same name is refused, before anything is made.
         #expect(throws: SetupError.self) {
-            try VaultSetup.create(name: "Test Vault", in: scratch.root, size: "100m", payload: payload,
+            try VaultSetup.create(name: "Test Vault", in: scratch.root, size: "100m", payload: payload, tagger: .joyTag,
                                   mountRoot: scratch.mountRoot)
         }
     }
@@ -63,14 +63,14 @@ struct VaultSetupTests {
         let scratch = try Scratch()
         let payload = try scratch.payload(version: "1.3.0")
         var steps: [SetupStep] = []
-        let bare = try VaultSetup.create(name: "No Tags", in: scratch.root, size: "100m", payload: payload, tagging: false,
+        let bare = try VaultSetup.create(name: "No Tags", in: scratch.root, size: "100m", payload: payload, tagger: .none,
                                          mountRoot: scratch.mountRoot) { steps.append($0) }
         #expect(steps == [.creating, .opening, .installingApp, .checking], "no JoyTag step")
         #expect(bare.joyTag == .leftOut)
         #expect(!fm.fileExists(atPath: bare.mountPoint.appendingPathComponent(".catalog/models/JoyTag").path))
         #expect(fm.fileExists(atPath: bare.mountPoint.appendingPathComponent("PhotoVault.app").path))
 
-        let tagged = try VaultSetup.create(name: "Tags", in: scratch.root, size: "100m", payload: payload,
+        let tagged = try VaultSetup.create(name: "Tags", in: scratch.root, size: "100m", payload: payload, tagger: .joyTag,
                                            mountRoot: scratch.mountRoot)
         let jt = tagged.mountPoint.appendingPathComponent(".catalog/models/JoyTag")
         #expect(fm.fileExists(atPath: jt.path))
@@ -78,20 +78,54 @@ struct VaultSetupTests {
         let catalog = tagged.mountPoint.appendingPathComponent(".catalog/catalog.sqlite")
         try Data("tags live here".utf8).write(to: catalog)
 
-        let off = try VaultSetup.install(into: tagged.mountPoint, payload: payload, tagging: false, mountRoot: scratch.mountRoot)
+        let off = try VaultSetup.install(into: tagged.mountPoint, payload: payload, tagger: .none, mountRoot: scratch.mountRoot)
         #expect(off.joyTag == .removed("test1"))
         #expect(!fm.fileExists(atPath: jt.path), "the model is gone, freeing its space")
         #expect(try Data(contentsOf: catalog) == Data("tags live here".utf8), "the catalog isn't touched")
 
-        let again = try VaultSetup.install(into: tagged.mountPoint, payload: payload, mountRoot: scratch.mountRoot)
+        let again = try VaultSetup.install(into: tagged.mountPoint, payload: payload, tagger: .joyTag, mountRoot: scratch.mountRoot)
         #expect(again.joyTag == .installed("test1"))
         #expect(VaultSetup.files(in: jt) == VaultSetup.files(in: payload.joyTag))
+    }
+
+    /// SigLIP 2 unless told otherwise, and one model at most: choosing one
+    /// takes the other off, leaving the catalog alone.
+    @Test func oneTaggerAtATimeSigLIPByDefault() throws {
+        #expect(Tagger.default == .siglip)
+        #expect(Tagger.allCases.map(\.title) == ["SigLIP 2", "JoyTag", "None"])
+        let scratch = try Scratch()
+        let payload = try scratch.payload(version: "1.3.0")
+        let made = try VaultSetup.create(name: "Default", in: scratch.root, size: "100m", payload: payload,
+                                         mountRoot: scratch.mountRoot)
+        let sg = made.mountPoint.appendingPathComponent(".catalog/models/SigLIP2")
+        let jt = made.mountPoint.appendingPathComponent(".catalog/models/JoyTag")
+        #expect(made.siglip == .installed("sg1"))
+        #expect(made.joyTag == .leftOut)
+        #expect(VaultSetup.files(in: sg) == VaultSetup.files(in: payload.siglip))
+        #expect(!fm.fileExists(atPath: jt.path))
+        #expect(try VaultSetup.inspect(made.mountPoint).tagger == .siglip)
+
+        let catalog = made.mountPoint.appendingPathComponent(".catalog/catalog.sqlite")
+        try Data("tags live here".utf8).write(to: catalog)
+        let toJoyTag = try VaultSetup.install(into: made.mountPoint, payload: payload, tagger: .joyTag, mountRoot: scratch.mountRoot)
+        #expect(toJoyTag.siglip == .removed("sg1"))
+        #expect(toJoyTag.joyTag == .installed("test1"))
+        #expect(!fm.fileExists(atPath: sg.path) && fm.fileExists(atPath: jt.path))
+        #expect(try VaultSetup.inspect(made.mountPoint).tagger == .joyTag)
+
+        let back = try VaultSetup.install(into: made.mountPoint, payload: payload, mountRoot: scratch.mountRoot)
+        #expect(back.joyTag == .removed("test1"))
+        #expect(back.siglip == .installed("sg1"))
+        #expect(!fm.fileExists(atPath: jt.path) && fm.fileExists(atPath: sg.path))
+        #expect(try VaultSetup.install(into: made.mountPoint, payload: payload, mountRoot: scratch.mountRoot).siglip == .alreadyThere("sg1"))
+        #expect(try Data(contentsOf: catalog) == Data("tags live here".utf8), "the catalog isn't touched")
+        #expect(Tagger(argument: "SigLIP") == .siglip && Tagger(argument: "joytag") == .joyTag && Tagger(argument: "x") == nil)
     }
 
     @Test func installingLeavesThePhotosAndTheCatalogAlone() throws {
         let scratch = try Scratch()
         let old = try scratch.payload(version: "1.2.0")
-        let mount = try VaultSetup.create(name: "Old Vault", in: scratch.root, size: "100m", payload: old,
+        let mount = try VaultSetup.create(name: "Old Vault", in: scratch.root, size: "100m", payload: old, tagger: .joyTag,
                                           mountRoot: scratch.mountRoot).mountPoint
         // As a vault set up before JoyTag came with PhotoVault.
         try fm.removeItem(at: mount.appendingPathComponent(".catalog/models"))
@@ -117,7 +151,7 @@ struct VaultSetupTests {
 
         let new = try scratch.payload(version: "1.3.0")
         var steps: [SetupStep] = []
-        let report = try VaultSetup.install(into: mount, payload: new) { steps.append($0) }
+        let report = try VaultSetup.install(into: mount, payload: new, tagger: .joyTag) { steps.append($0) }
         #expect(steps == [.installingApp, .installingJoyTag, .checking])
         #expect(report.version == "1.3.0")
         #expect(report.replacedVersion == "1.2.0")
@@ -138,7 +172,7 @@ struct VaultSetupTests {
         // Again: JoyTag is there already, and a tag groups file someone has
         // edited is kept.
         try Data("edited".utf8).write(to: mount.appendingPathComponent(".Tag Groups.txt"))
-        let again = try VaultSetup.install(into: mount, payload: new)
+        let again = try VaultSetup.install(into: mount, payload: new, tagger: .joyTag)
         #expect(again.joyTag == .alreadyThere("test1"))
         #expect(again.tagGroups == .kept)
         #expect(again.replacedVersion == "1.3.0")
@@ -151,13 +185,13 @@ struct VaultSetupTests {
         let weights = jt.appendingPathComponent("JoyTag.mlmodelc/weights/weight.bin")
         let weightsCopied = try fm.attributesOfItem(atPath: weights.path)[.creationDate] as? Date
         try fm.removeItem(at: jt.appendingPathComponent("LICENSE.txt"))
-        #expect(try VaultSetup.install(into: mount, payload: new).joyTag == .installed("test1"))
+        #expect(try VaultSetup.install(into: mount, payload: new, tagger: .joyTag).joyTag == .installed("test1"))
         #expect(VaultSetup.files(in: jt) == VaultSetup.files(in: new.joyTag))
         #expect(try fm.attributesOfItem(atPath: weights.path)[.creationDate] as? Date == weightsCopied)
 
         // Another JoyTag version is replaced whole.
         let newer = try scratch.payload(version: "1.3.1", joyTagVersion: "test2")
-        #expect(try VaultSetup.install(into: mount, payload: newer).joyTag == .installed("test2"))
+        #expect(try VaultSetup.install(into: mount, payload: newer, tagger: .joyTag).joyTag == .installed("test2"))
         #expect(VaultSetup.files(in: jt) == VaultSetup.files(in: newer.joyTag))
         #expect(VaultSetup.joyTagVersion(in: mount) == "test2")
         #expect(VaultSetup.catalogFiles(in: mount) == catalogBefore)
@@ -166,14 +200,14 @@ struct VaultSetupTests {
     @Test func aDiskImageThatIsntOpenIsOpenedToInstall() throws {
         let scratch = try Scratch()
         let payload = try scratch.payload(version: "1.3.0")
-        let created = try VaultSetup.create(name: "Closed", in: scratch.root, size: "100m", payload: payload,
+        let created = try VaultSetup.create(name: "Closed", in: scratch.root, size: "100m", payload: payload, tagger: .joyTag,
                                             mountRoot: scratch.mountRoot)
         let image = try #require(created.createdImage)
         try DiskImages.detach(created.mountPoint)
         #expect(DiskImages.mountPoint(of: image) == nil)
 
         var steps: [SetupStep] = []
-        let report = try VaultSetup.install(into: image, payload: payload, mountRoot: scratch.mountRoot) { steps.append($0) }
+        let report = try VaultSetup.install(into: image, payload: payload, tagger: .joyTag, mountRoot: scratch.mountRoot) { steps.append($0) }
         #expect(steps == [.opening, .installingApp, .installingJoyTag, .checking])
         #expect(DiskImages.mountPoint(of: image).map(DiskImages.canonical) == DiskImages.canonical(report.mountPoint))
         #expect(report.joyTag == .alreadyThere("test1"))
@@ -182,7 +216,7 @@ struct VaultSetupTests {
     @Test func aPhotoVaultOpenFromTheVaultIsQuitFirst() throws {
         let scratch = try Scratch()
         let payload = try scratch.payload(version: "1.3.0")
-        let mount = try VaultSetup.create(name: "In Use", in: scratch.root, size: "100m", payload: payload,
+        let mount = try VaultSetup.create(name: "In Use", in: scratch.root, size: "100m", payload: payload, tagger: .joyTag,
                                           mountRoot: scratch.mountRoot).mountPoint
         // The stand-in PhotoVault is a copy of sleep, run from the vault.
         let running = Process()
@@ -195,7 +229,7 @@ struct VaultSetupTests {
         #expect(try VaultSetup.inspect(mount).photoVaultIsOpen)
 
         var steps: [SetupStep] = []
-        let report = try VaultSetup.install(into: mount, payload: payload) { steps.append($0) }
+        let report = try VaultSetup.install(into: mount, payload: payload, tagger: .joyTag) { steps.append($0) }
         #expect(steps == [.quitting, .installingApp, .installingJoyTag, .checking])
         #expect(report.quitPhotoVault)
         running.waitUntilExit()
@@ -208,7 +242,7 @@ struct VaultSetupTests {
         let payload = try scratch.payload(version: "1.3.0")
         let folder = scratch.root.appendingPathComponent("Not a vault")
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)
-        #expect(throws: SetupError.self) { try VaultSetup.install(into: folder, payload: payload) }
+        #expect(throws: SetupError.self) { try VaultSetup.install(into: folder, payload: payload, tagger: .joyTag) }
         #expect(!fm.fileExists(atPath: folder.appendingPathComponent("PhotoVault.app").path))
 
         // A disk image that isn't a vault is closed again, as it was.
@@ -238,7 +272,7 @@ struct VaultSetupTests {
         let payload = try scratch.payload(version: "1.3.0")
         let password = "throwaway test password"
         let created = try VaultSetup.create(name: "Locked", in: scratch.root, size: "100m", payload: payload,
-                                            password: password, mountRoot: scratch.mountRoot)
+                                            password: password, tagger: .joyTag, mountRoot: scratch.mountRoot)
         let image = try #require(created.createdImage)
         #expect(fm.fileExists(atPath: created.mountPoint.appendingPathComponent("PhotoVault.app").path))
         // Nothing of the vault's contents is readable in its band files.
@@ -258,11 +292,11 @@ struct VaultSetupTests {
         #expect(DiskImages.mountPoint(of: image) == nil)
 
         // Installing on it, closed: opened with the password, then as any vault.
-        let report = try VaultSetup.install(into: image, payload: payload, password: password, mountRoot: scratch.mountRoot)
+        let report = try VaultSetup.install(into: image, payload: payload, password: password, tagger: .joyTag, mountRoot: scratch.mountRoot)
         #expect(report.joyTag == .alreadyThere("test1"))
         #expect(try VaultSetup.inspect(report.mountPoint).installedVersion == "1.3.0")
         #expect(throws: SetupError.self) {
-            try VaultSetup.create(name: "Empty", in: scratch.root, size: "100m", payload: payload, password: "",
+            try VaultSetup.create(name: "Empty", in: scratch.root, size: "100m", payload: payload, password: "", tagger: .joyTag,
                                   mountRoot: scratch.mountRoot)
         }
     }
@@ -308,8 +342,8 @@ final class Scratch {
     }
 
     /// What the installer carries, with a small signed stand-in for
-    /// PhotoVault — a copy of sleep — and a small one for JoyTag.
-    func payload(version: String, joyTagVersion: String = "test1") throws -> Payload {
+    /// PhotoVault — a copy of sleep — and small ones for JoyTag and SigLIP 2.
+    func payload(version: String, joyTagVersion: String = "test1", siglipVersion: String = "sg1") throws -> Payload {
         let fm = FileManager.default
         let folder = root.appendingPathComponent("payload-\(version)")
         let contents = folder.appendingPathComponent("PhotoVault.app/Contents")
@@ -331,6 +365,13 @@ final class Scratch {
         try Data(repeating: 7, count: 100_000).write(to: jt.appendingPathComponent("JoyTag.mlmodelc/weights/weight.bin"))
         try Data("tag\n".utf8).write(to: jt.appendingPathComponent("tags.txt"))
         try Data("Apache License 2.0".utf8).write(to: jt.appendingPathComponent("LICENSE.txt"))
+        let sg = folder.appendingPathComponent("SigLIP2")
+        try fm.createDirectory(at: sg.appendingPathComponent("SigLIP2.mlmodelc/weights"), withIntermediateDirectories: true)
+        try Data(#"{"tool": "SigLIP 2", "version": "\#(siglipVersion)"}"#.utf8).write(to: sg.appendingPathComponent("manifest.json"))
+        try Data(repeating: 8, count: 50_000).write(to: sg.appendingPathComponent("SigLIP2.mlmodelc/weights/weight.bin"))
+        try Data("beach\n".utf8).write(to: sg.appendingPathComponent("tags.txt"))
+        try Data(repeating: 0, count: 16).write(to: sg.appendingPathComponent("text_embeddings.f32"))
+        try Data("Apache License 2.0".utf8).write(to: sg.appendingPathComponent("LICENSE.txt"))
         return try Payload(folder: folder)
     }
 }

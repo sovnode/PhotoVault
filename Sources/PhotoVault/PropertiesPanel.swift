@@ -6,8 +6,9 @@ import PhotoVaultCore
 ///
 /// Everything here comes from the catalog, apart from camera, exposure and
 /// location, which are read from the file's header when a photo is shown.
-/// Location appears as coordinates only: a map would fetch tiles from Apple's
-/// servers and reveal where the photo was taken.
+/// Location appears as coordinates, with Show on Map for PhotoVault's own map,
+/// which is drawn from data that comes with the app: nothing is fetched, and
+/// the place is never sent anywhere.
 struct PropertiesPanel: View {
     @EnvironmentObject var model: LibraryModel
     let item: PhotoItem
@@ -53,10 +54,15 @@ struct PropertiesPanel: View {
                         if let exposure = metadata.exposureDescription { row("Exposure", exposure) }
                     }
                 }
-                if let coordinates = metadata.coordinatesDescription {
+                if let coordinates = metadata.coordinatesDescription,
+                   let latitude = metadata.latitude, let longitude = metadata.longitude {
                     section("Location") {
                         row("Coordinates", coordinates)
-                        note("Shown as text only; no map is loaded.")
+                        Button("Show on Map") {
+                            model.showOnMap(item, at: GeoPoint(latitude: latitude, longitude: longitude))
+                        }
+                        .controlSize(.small)
+                        .help("This view as a map, at this photo. The map is drawn on this Mac: the location isn't sent anywhere.")
                     }
                 }
                 section("Library") {
@@ -80,11 +86,16 @@ struct PropertiesPanel: View {
         albums = await model.albumNames(for: item)
         tags = await model.tags(for: item)
         records = await model.classifications(for: item)
-        guard item.mediaType == .photo, let url = model.url(for: item) else {
-            metadata = PhotoMetadata()
-            return
+        var read = PhotoMetadata()
+        if item.mediaType == .photo, let url = model.url(for: item) {
+            read = await Task.detached(priority: .userInitiated) { PhotoMetadata.read(url: url) }.value
         }
-        metadata = await Task.detached(priority: .userInitiated) { PhotoMetadata.read(url: url) }.value
+        // A video's place is in the catalog, read when it was scanned.
+        if read.latitude == nil, let place = await model.location(for: item) {
+            read.latitude = place.latitude
+            read.longitude = place.longitude
+        }
+        metadata = read
     }
 
     /// The photo's tags by where they came from — JoyTag, a tool that declared

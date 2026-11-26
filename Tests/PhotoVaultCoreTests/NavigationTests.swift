@@ -394,7 +394,8 @@ struct SortDirectionTests {
         sqlite3_close(db)
         // (The migration adds the column again: drop it first, as v4 had none.)
         try #require(sqlite3_open(vault.catalogFile.path, &db) == SQLITE_OK)
-        try #require(sqlite3_exec(db, "ALTER TABLE photo DROP COLUMN created_at; ALTER TABLE smart_album DROP COLUMN sort_index;", nil, nil, nil) == SQLITE_OK)
+        try #require(sqlite3_exec(db, "ALTER TABLE photo DROP COLUMN created_at; ALTER TABLE smart_album DROP COLUMN sort_index;"
+                                  + TestVault.dropLocationColumns, nil, nil, nil) == SQLITE_OK)
         sqlite3_close(db)
 
         let catalog = try Catalog(url: vault.catalogFile)
@@ -553,7 +554,8 @@ struct AlbumOrderTests {
         }
         var db: OpaquePointer?
         try #require(sqlite3_open(vault.catalogFile.path, &db) == SQLITE_OK)
-        try #require(sqlite3_exec(db, "ALTER TABLE smart_album DROP COLUMN sort_index; PRAGMA user_version = 5;", nil, nil, nil) == SQLITE_OK)
+        try #require(sqlite3_exec(db, "ALTER TABLE smart_album DROP COLUMN sort_index; PRAGMA user_version = 5;"
+                                  + TestVault.dropLocationColumns, nil, nil, nil) == SQLITE_OK)
         sqlite3_close(db)
 
         let catalog = try Catalog(url: vault.catalogFile)

@@ -28,3 +28,7 @@ tools/joytag/
 
 # Python bytecode
 __pycache__/
+
+# SigLIP 2: downloaded model, Python environment, reports (Scripts/siglip/fetch.sh).
+# The reports hold tags derived from vault photos.
+tools/siglip/

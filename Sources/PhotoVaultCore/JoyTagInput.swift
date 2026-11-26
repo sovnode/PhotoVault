@@ -146,9 +146,13 @@ public enum JoyTagInput {
         resize(image, width: size, height: size)
     }
 
-    static func resize(_ image: RGB8, width outW: Int, height outH: Int) -> RGB8 {
-        let horiz = Coefficients(inSize: image.width, outSize: outW)
-        let vert = Coefficients(inSize: image.height, outSize: outH)
+    /// Pillow's resampling filters PhotoVault's models were trained with:
+    /// bicubic for JoyTag, bilinear for SigLIP 2.
+    public enum Filter: Sendable { case bicubic, bilinear }
+
+    static func resize(_ image: RGB8, width outW: Int, height outH: Int, filter: Filter = .bicubic) -> RGB8 {
+        let horiz = Coefficients(inSize: image.width, outSize: outW, filter: filter)
+        let vert = Coefficients(inSize: image.height, outSize: outH, filter: filter)
         // Only the rows the vertical pass reads are resized horizontally.
         let firstRow = vert.start[0]
         let lastRow = vert.start[outH - 1] + vert.count[outH - 1]
@@ -216,10 +220,12 @@ public enum JoyTagInput {
         /// Fixed-point weights, `ksize` per output pixel.
         var k: [Int]
 
-        init(inSize: Int, outSize: Int) {
+        init(inSize: Int, outSize: Int, filter: Filter = .bicubic) {
             let scale = Double(inSize) / Double(outSize)
             let filterScale = max(scale, 1)
-            let support = 2 * filterScale   // bicubic's support is 2
+            // Bicubic's support is 2, bilinear's 1.
+            let support = (filter == .bicubic ? 2 : 1) * filterScale
+            let weight: (Double) -> Double = filter == .bicubic ? Coefficients.bicubic : Coefficients.bilinear
             ksize = Int(support.rounded(.up)) * 2 + 1
             start = [Int](repeating: 0, count: outSize)
             count = [Int](repeating: 0, count: outSize)
@@ -235,7 +241,7 @@ public enum JoyTagInput {
                 xmax -= xmin
                 var total = 0.0
                 for x in 0..<xmax {
-                    let w = Coefficients.bicubic((Double(x + xmin) - center + 0.5) * ss)
+                    let w = weight((Double(x + xmin) - center + 0.5) * ss)
                     weights[xx * ksize + x] = w
                     total += w
                 }
@@ -255,6 +261,11 @@ public enum JoyTagInput {
             if x < 1 { return ((a + 2) * x - (a + 3)) * x * x + 1 }
             if x < 2 { return (((x - 5) * x + 8) * x - 4) * a }
             return 0
+        }
+
+        static func bilinear(_ x: Double) -> Double {
+            let x = abs(x)
+            return x < 1 ? 1 - x : 0
         }
 
         static func clip8(_ v: Int) -> UInt8 {

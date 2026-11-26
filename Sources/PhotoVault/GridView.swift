@@ -33,6 +33,7 @@ struct GridView: View {
                 TagFilterPanel(album: album)
                 Divider()
             }
+            ZStack {
             if model.items.isEmpty {
                 emptyState
             } else {
@@ -130,6 +131,13 @@ struct GridView: View {
                 )
                 }
             }
+            // The map lies over the grid rather than replacing it: back in
+            // the grid, it's where it was, and Show in Library from the map
+            // scrolls it as it would anyway.
+            if model.showingMap {
+                MapScreen()
+            }
+            }
         }
         // No title while a photo or video is open: it showed over the top of
         // the picture whenever macOS brought the title bar back.
@@ -182,6 +190,16 @@ struct GridView: View {
 
     private var toolbar: some View {
         HStack(spacing: 12) {
+            Picker("", selection: Binding(get: { model.showingMap }, set: { model.setShowingMap($0) })) {
+                Image(systemName: "square.grid.2x2").help("Grid").tag(false)
+                Image(systemName: "map").help("Map").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .fixedSize()
+            .disabled(model.scope == .trash)
+            .help(Shortcut.mapToggle.help("Show this view as a grid, or as a map of where its photos were taken"))
+            .accessibilityLabel("Grid or map")
+
             Picker("", selection: $model.filter) {
                 ForEach(MediaFilter.allCases, id: \.self) { Text($0.label).tag($0) }
             }
@@ -210,7 +228,7 @@ struct GridView: View {
                 .help("Change which tags this smart album shows")
             }
 
-            if let sort = model.sort {
+            if let sort = model.sort, !model.showingMap {
                 Picker("Sort", selection: Binding(get: { sort.order },
                                                   set: { model.setSortOrder($0) })) {
                     ForEach(PhotoOrder.choices(for: model.scope), id: \.self) { Text($0.label).tag($0) }
@@ -232,17 +250,25 @@ struct GridView: View {
                 .accessibilityLabel(sort.order == .random ? "Shuffle again" : sort.order.directionLabel(ascending: sort.ascending))
             }
 
+            if !model.showingMap {
             autoScrollButton
 
             Image(systemName: "photo")
                 .font(.caption2)
             Slider(value: Binding(get: { model.thumbnailSize }, set: { model.setThumbnailSize($0) }),
-                   in: Self.sizeRange).frame(width: 120)
+                   in: Self.sizeRange).frame(minWidth: 50, maxWidth: 120)
                 .help("Thumbnail size (⌘+, ⌘−)")
             Image(systemName: "photo.fill")
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        // Exactly as wide as the window gives: in a narrow window the
+        // controls run off the end rather than widening everything below —
+        // a grid wider than the window worked out its rows wrongly, and the
+        // arrow keys went to the wrong photo.
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .clipped()
     }
 
     /// Play/pause for scrolling by itself, with the speed in its menu.
@@ -329,10 +355,13 @@ struct GridView: View {
         Button("Rotate Right") { Task { await model.rotate(rotatable, clockwise: true) } }
             .shortcut(.rotateRight)
             .disabled(rotatable.isEmpty)
-        Button(targets.count == 1 ? "Re-tag with JoyTag" : "Re-tag \(targets.count) Photos with JoyTag") {
-            model.retag(targets)
+        ForEach(model.installedTaggers.isEmpty ? [JoyTag.prefix] : model.installedTaggers, id: \.self) { prefix in
+            let tool = OwnTaggers.tool(prefix)
+            Button(targets.count == 1 ? "Re-tag with \(tool)" : "Re-tag \(targets.count) Photos with \(tool)") {
+                model.retag(targets, with: prefix)
+            }
+            .disabled(!model.installedTaggers.contains(prefix) || model.scanning)
         }
-        .disabled(!model.canTag || model.scanning)
         MoveToFolderMenu(targets: { targets }, title: "Move \(noun) to Folder")
             .disabled(model.scanning)
         Divider()

@@ -8,9 +8,13 @@ import CoreGraphics
 /// track loading, the preferred transform, the 10% seek — can be exercised with
 /// a fake file, so the tests make one.
 enum VideoFixture {
-    static func write(to url: URL, seconds: Int = 2, size: CGSize = CGSize(width: 160, height: 120)) async throws {
+    /// `metadata` goes into the movie's header (a location, say). A `.mov`
+    /// name makes a QuickTime movie; anything else, an MP4.
+    static func write(to url: URL, seconds: Int = 2, size: CGSize = CGSize(width: 160, height: 120),
+                      metadata: [AVMetadataItem] = []) async throws {
         try? FileManager.default.removeItem(at: url)
-        let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
+        let writer = try AVAssetWriter(outputURL: url, fileType: url.pathExtension.lowercased() == "mov" ? .mov : .mp4)
+        writer.metadata = metadata
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: Int(size.width),

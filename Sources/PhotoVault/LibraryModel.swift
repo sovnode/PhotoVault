@@ -22,7 +22,7 @@ final class ThumbnailSignal: ObservableObject {}
 
 @MainActor
 final class LibraryModel: ObservableObject {
-    @Published private(set) var items: [PhotoItem] = []
+    @Published private(set) var items: [PhotoItem] = [] { didSet { itemIndex = nil } }
     @Published private(set) var albums: [Album] = []
     @Published private(set) var smartAlbums: [SmartAlbum] = []
     @Published private(set) var albumCounts: [Int64: Int] = [:]
@@ -197,6 +197,8 @@ final class LibraryModel: ObservableObject {
 
     /// JoyTag's files in this vault; nil with `taggerUnavailable` saying why.
     private var joyTagFiles: JoyTagFiles?
+    /// SigLIP 2's files in this vault, if it's installed.
+    private var siglipFiles: SigLIPFiles?
     @Published private(set) var taggerUnavailable: String? = "JoyTag isn't installed in this vault."
     /// What the background task is, while `scanning`: a scan or tagging.
     @Published private(set) var job: Job = .scan
@@ -210,8 +212,10 @@ final class LibraryModel: ObservableObject {
 
     struct TaggingQuestion: Identifiable {
         let id = UUID()
-        /// The photos to re-tag, or nil for every photo JoyTag hasn't tagged.
+        /// The photos to re-tag, or nil for every photo the taggers haven't tagged.
         let ids: [Int64]?
+        /// The taggers to run, in order: JoyTag's prefix, SigLIP 2's, or both.
+        let prefixes: [String]
         let title: String
         let message: String
         let action: String
@@ -416,6 +420,132 @@ final class LibraryModel: ObservableObject {
         }
     }
 
+    // MARK: - The map
+
+    /// The view shown as a map of where its photos were taken, rather than
+    /// as a grid. Each view keeps its own, in the vault; the Trash is never
+    /// a map.
+    @Published private(set) var showingMap = false
+    /// Where the view's photos were taken, while it's a map: those whose
+    /// files record it.
+    @Published private(set) var mapPoints: [MapPoint] = []
+    /// Where the map was left in the view on show, or nil to fit its photos.
+    /// Set when a view comes up as a map; the map keeps it from there.
+    @Published private(set) var mapCamera: MapCamera?
+    /// The view `mapCamera` belongs to (its `storageValue`).
+    @Published private(set) var mapView: String?
+    private var viewMaps: [String: Bool] = [:]
+    private var mapCameras: [String: MapCamera] = [:]
+    private var mapCameraSave: Task<Void, Never>?
+
+    private static func mapKey(_ scope: LibraryScope) -> String { "map.\(scope.storageValue)" }
+    private static func mapCameraKey(_ scope: LibraryScope) -> String { "map.camera.\(scope.storageValue)" }
+
+    private func mapSetting(for scope: LibraryScope) async -> Bool {
+        if case .trash = scope { return false }
+        let key = Self.mapKey(scope)
+        if let known = viewMaps[key] { return known }
+        let saved = await store?.setting(key) == "1"
+        viewMaps[key] = saved
+        return saved
+    }
+
+    private func mapCameraSetting(for scope: LibraryScope) async -> MapCamera? {
+        let key = Self.mapCameraKey(scope)
+        if let known = mapCameras[key] { return known }
+        let saved = await store?.setting(key).flatMap(MapCamera.init(storageValue:))
+        if let saved { mapCameras[key] = saved }
+        return saved
+    }
+
+    /// Grid or map, for the view on show (Grid | Map in the toolbar, ⇧⌘M).
+    func setShowingMap(_ on: Bool) {
+        if case .trash = scope, on { return }
+        guard on != showingMap else { return }
+        let key = Self.mapKey(scope)
+        viewMaps[key] = on
+        if on {
+            // The grid stays under the map, where it was; nothing in it
+            // is acted on while it can't be seen.
+            autoScrolling = false
+            clearSelection()
+        }
+        Task {
+            await store?.setSetting(key, on ? "1" : "0")
+            await reload()
+        }
+    }
+
+    func toggleMapCommand() {
+        guard viewing == nil else { return }
+        setShowingMap(!showingMap)
+    }
+
+    /// Where the map is now looking, kept for the view a moment after it
+    /// stops moving.
+    func noteMapCamera(_ camera: MapCamera) {
+        guard showingMap else { return }
+        let scope = self.scope
+        let key = Self.mapCameraKey(scope)
+        guard mapCameras[key] != camera else { return }
+        mapCameras[key] = camera
+        mapCameraSave?.cancel()
+        mapCameraSave = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.store?.setSetting(key, camera.storageValue)
+        }
+    }
+
+    /// A photo clicked on the map: as Show in Library — All Media, with the
+    /// photo selected and scrolled into view, in the grid.
+    func showFromMap(_ id: Int64) {
+        Task {
+            guard let store, let item = try? await store.photo(id: id) else { return }
+            let key = Self.mapKey(.all)
+            viewMaps[key] = false
+            await store.setSetting(key, "0")
+            showInLibrary(item)
+        }
+    }
+
+    /// Where a photo or video was taken, as the catalog keeps it.
+    func location(for item: PhotoItem) async -> GeoPoint? {
+        try? await store?.location(for: item.id)?.point
+    }
+
+    /// Show on Map, from the properties panel: the view the photo was opened
+    /// from, as a map, close in on it.
+    func showOnMap(_ item: PhotoItem, at place: GeoPoint) {
+        guard scope != .trash else { return }
+        viewing = nil
+        mapCameras[Self.mapCameraKey(scope)] = MapCamera(center: WebMercator.project(place), zoom: 15)
+        if showingMap {
+            mapView = nil
+            Task { await reload() }
+        } else {
+            setShowingMap(true)
+        }
+    }
+
+    /// Each item's place in `items`, made when first asked for after they
+    /// change: the map looks up the photos it draws by id.
+    private var itemIndex: [Int64: Int]?
+
+    func item(id: Int64) -> PhotoItem? {
+        if itemIndex == nil {
+            itemIndex = Dictionary(items.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+        }
+        return itemIndex?[id].map { items[$0] }
+    }
+
+    /// The photos in a cluster the map can't part — taken at one spot — for
+    /// it to list.
+    func mapItems(_ ids: [Int64]) -> [PhotoItem] {
+        let wanted = Set(ids)
+        return items.filter { wanted.contains($0.id) }
+    }
+
     /// All, Photos or Videos, as each view was last left: the filter is the
     /// view's own, not one for every view.
     private var viewFilters: [String: MediaFilter] = [:]
@@ -591,12 +721,14 @@ final class LibraryModel: ObservableObject {
         case 126: arrow = .up
         case 49:
             // Space: in the viewer it's the video's play and pause.
-            guard viewing == nil else { return false }
+            guard viewing == nil, !showingMap else { return false }
             autoScrollCommand()
             return true
         default: return false
         }
         guard let arrow else { return false }
+        // On the map the arrows move the map: the map's own.
+        if viewing == nil, showingMap { return false }
         if viewing != nil {
             switch arrow {
             case .left: step(-1); return true
@@ -680,6 +812,7 @@ final class LibraryModel: ObservableObject {
                 self.showSheetForSmokeTest()
                 await self.leaveForSmokeTest()
                 await self.timeSwitchingForSmokeTest()
+                await self.checkMapForSmokeTest()
                 await self.considerTagging()
             }
         }
@@ -705,7 +838,7 @@ final class LibraryModel: ObservableObject {
             switch job {
             case .scan: return "PhotoVault is checking the vault for changes."
             case .moving: return "PhotoVault is moving photos."
-            case .tagging, .retagging: return "PhotoVault is loading JoyTag."
+            case .tagging, .retagging: return "PhotoVault is loading a tagging model."
             }
         }
         let text = Self.describe(p)
@@ -823,6 +956,48 @@ final class LibraryModel: ObservableObject {
         filter = .all
         await settle()
         fflush(stdout)
+    }
+
+    /// Hook for `Scripts/smoke-test.sh`: All Media as a map — what it shows,
+    /// once its tiles and markers are drawn — then a photo on it clicked, as
+    /// a person would, which should land in the grid with the photo
+    /// selected. The map is left showing for the idle-CPU check, then the
+    /// grid comes back. `PHOTOVAULT_SMOKE_MAP=1`; inert otherwise.
+    private var smokeMapChecked = false
+    private func checkMapForSmokeTest() async {
+        guard !smokeMapChecked, ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_MAP"] == "1",
+              scope == .all, !items.isEmpty else { return }
+        smokeMapChecked = true
+        func settle(_ seconds: Double = 1.5) async { try? await Task.sleep(nanoseconds: UInt64(seconds * 1e9)) }
+        setShowingMap(true)
+        for _ in 0..<50 where !(showingMap && !mapPoints.isEmpty) { await settle(0.1) }
+        // Loaded and drawn — the world outline, its shading, the first
+        // tiles — before it counts as idle.
+        for _ in 0..<150 where MapCanvas.smokeLatest?.isSettled != true { await settle(0.1) }
+        await settle(1)
+        let shown = MapCanvas.smokeLatest?.smokeSummary
+        SmokeHooks.say("map: \(mapPoints.count) of \(items.count) located; \(shown?.markers ?? 0) markers holding \(shown?.photos ?? 0), \(shown?.tiles ?? 0) tiles")
+        SmokeHooks.say("map idle")
+        await settle(7)   // the script measures idle CPU here
+        // Each view keeps its own: a folder never shown as a map is a grid,
+        // and All Media comes back as the map, where it was.
+        let left = MapCanvas.smokeLatest?.camera
+        if let folder = folderTree?.children?.first(where: { $0.totalCount > 0 })?.id {
+            scope = .folder(folder)
+            for _ in 0..<50 where lastShownScope != .folder(folder) { await settle(0.1) }
+            await settle(0.5)
+            let folderGrid = !showingMap
+            scope = .all
+            for _ in 0..<50 where !(lastShownScope == .all && showingMap) { await settle(0.1) }
+            await settle(1)
+            let back = MapCanvas.smokeLatest?.camera
+            let same = left.map { l in back.map { abs($0.zoom - l.zoom) < 0.01 && abs($0.center.x - l.center.x) < 1e-6 } ?? false } ?? false
+            SmokeHooks.say("map per view: a folder is a grid: \(folderGrid ? "yes" : "no"); All Media a map again, where it was: \(showingMap && same ? "yes" : "no")")
+        }
+        guard let target = mapPoints.first?.id else { return }
+        showFromMap(target)
+        for _ in 0..<50 where showingMap || selection != [target] { await settle(0.1) }
+        SmokeHooks.say("map click: \(!showingMap && selection == [target] ? "shown in the grid, selected" : "not shown")")
     }
 
     /// Hook for measuring: switches between All Media and a folder a few
@@ -1096,6 +1271,30 @@ final class LibraryModel: ObservableObject {
             // "manual" or "manual:<chapter>": the user manual's window.
             manualChapter = show.contains(":") ? String(show.split(separator: ":")[1]) : UserManual.chapters[0].id
             smokeOpenManual = true
+        case let show? where show.hasPrefix("map"):
+            // "map", or "map:<latitude>,<longitude>,<zoom>": the view as a
+            // map, looking there. "maplist:…": and the photos of the marker
+            // nearest the middle, listed.
+            if show.contains(":") {
+                let n = show.split(separator: ":")[1].split(separator: ",").compactMap { Double($0) }
+                if n.count == 3 {
+                    mapCameras[Self.mapCameraKey(scope)] = MapCamera(
+                        center: WebMercator.project(GeoPoint(latitude: n[0], longitude: n[1])), zoom: n[2])
+                }
+            }
+            if showingMap {
+                // Already a map (as the vault was left): looking there now.
+                mapView = nil
+                Task { await reload() }
+            } else {
+                setShowingMap(true)
+            }
+            if show.hasPrefix("maplist") {
+                Task {
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    MapCanvas.smokeLatest?.smokeListMiddle()
+                }
+            }
         default:
             break
         }
@@ -1473,10 +1672,24 @@ final class LibraryModel: ObservableObject {
             let tree = try await store.folderTree()
             var counts: [Int64: Int] = [:]
             for a in albums { counts[a.id] = try await store.albumCount(a.id) }
+            // The map's photos only while the view is a map: one more query.
+            let map = await mapSetting(for: scope)
+            let points = map ? try await store.locations(scope: scope, filter: filter, groups: tagGroups,
+                                                          subfolders: subfolders) : []
+            let camera = map ? await mapCameraSetting(for: scope) : nil
 
             if self.sort != sort { self.sort = sort }
             if includeSubfolders != subfolders { includeSubfolders = subfolders }
             if items != newItems { items = newItems }
+            if mapPoints != points { mapPoints = points }
+            if map, mapView != scope.storageValue {
+                // A view newly shown as a map: where it was left, if it was.
+                mapCamera = camera
+                mapView = scope.storageValue
+            } else if !map {
+                mapView = nil
+            }
+            if showingMap != map { showingMap = map }
             // Rows appear and disappear in the sidebar without animating: an
             // animated removal could leave the old row's text behind.
             var still = Transaction()
@@ -1654,17 +1867,29 @@ final class LibraryModel: ObservableObject {
     /// photo.
     static let defaultSecondsPerPhoto = 0.17
 
-    var canTag: Bool { joyTagFiles != nil }
+    var canTag: Bool { joyTagFiles != nil || siglipFiles != nil }
+
+    /// Show R18 Tags is offered unless the vault's tagger is SigLIP 2: its tag
+    /// list has nothing explicit, so the option would only puzzle.
+    var offersR18: Bool { siglipFiles == nil || joyTagFiles != nil }
+
+    /// PhotoVault's taggers installed in this vault, in the order they run:
+    /// JoyTag, then SigLIP 2.
+    var installedTaggers: [String] {
+        (joyTagFiles != nil ? [JoyTag.prefix] : []) + (siglipFiles != nil ? [SigLIP.prefix] : [])
+    }
 
     private func locateTagger(root: URL) {
         guard #available(macOS 15.0, *) else {
-            taggerUnavailable = "JoyTag needs macOS 15 or later."
+            taggerUnavailable = "Photo tagging needs macOS 15 or later."
             return
         }
+        siglipFiles = try? SigLIPFiles.load(from: SigLIPFiles.folder(in: root))
         // Left out at install, to save space: said plainly, with the way back.
         guard FileManager.default.fileExists(atPath: JoyTagFiles.folder(in: root).path) else {
             joyTagFiles = nil
-            taggerUnavailable = "Photo tagging isn't installed on this vault. To add it, open PhotoVault Installer and install on this vault with Photo tagging ticked."
+            taggerUnavailable = siglipFiles != nil ? nil
+                : "Photo tagging isn't installed on this vault. To add it, open PhotoVault Installer and install on this vault with a model chosen under Tagging."
             return
         }
         do {
@@ -1676,8 +1901,8 @@ final class LibraryModel: ObservableObject {
         }
     }
 
-    /// After a scan: tag the photos JoyTag hasn't seen — straight away for a
-    /// few, after asking for a large run.
+    /// After a scan: tag the photos the vault's taggers haven't seen —
+    /// straight away for a few, after asking for a large run.
     private func considerTagging() async {
         guard !taggingDeclined else { return }
         await offerTagging(ids: nil, quietlyIfNone: true)
@@ -1688,57 +1913,86 @@ final class LibraryModel: ObservableObject {
         Task { await offerTagging(ids: nil, quietlyIfNone: false) }
     }
 
-    /// Image ▸ Classifier ▸ Re-classify Selection With ▸ JoyTag, on the photo
-    /// open in the viewer or the grid selection; and Re-tag in the grid's menu.
-    func retagCommand() {
-        retag(viewing.map { [$0] } ?? selectedItems)
+    /// Image ▸ Classifier ▸ Re-classify Selection With ▸ JoyTag or SigLIP 2, on
+    /// the photo open in the viewer or the grid selection; and Re-tag in the
+    /// grid's menu.
+    func retagCommand(with prefix: String = JoyTag.prefix) {
+        retag(viewing.map { [$0] } ?? selectedItems, with: prefix)
     }
 
-    func retag(_ targets: [PhotoItem]) {
-        guard !targets.isEmpty else { return }
+    func retag(_ targets: [PhotoItem], with prefix: String = JoyTag.prefix) {
+        guard !targets.isEmpty, installedTaggers.contains(prefix) else { return }
         let ids = targets.map(\.id)
-        Task { await offerTagging(ids: ids, quietlyIfNone: false) }
+        Task { await offerTagging(ids: ids, quietlyIfNone: false, prefixes: [prefix]) }
     }
 
     var canRetagCurrent: Bool {
         canTag && !scanning && (viewing.map { !$0.trashed } ?? !selection.isEmpty) && scope != .trash
     }
 
-    private func offerTagging(ids: [Int64]?, quietlyIfNone: Bool) async {
-        guard let store, joyTagFiles != nil, scanTask == nil, taggingQuestion == nil else { return }
-        guard let plan = try? await store.classificationPlan(ids: ids, prefix: JoyTag.prefix), plan.photos > 0 else {
+    /// Until a run has measured this Mac, per photo.
+    private static func defaultSeconds(_ prefix: String) -> Double {
+        prefix == SigLIP.prefix ? 0.15 : defaultSecondsPerPhoto
+    }
+
+    private static func secondsKey(_ prefix: String) -> String {
+        prefix == JoyTag.prefix ? "tagging.secondsPerPhoto" : "tagging.\(prefix).secondsPerPhoto"
+    }
+
+    private func offerTagging(ids: [Int64]?, quietlyIfNone: Bool, prefixes: [String]? = nil) async {
+        let prefixes = prefixes ?? installedTaggers
+        guard let store, !prefixes.isEmpty, scanTask == nil, taggingQuestion == nil else { return }
+        var photos = 0, seconds = 0.0
+        var needed: [String] = []
+        for prefix in prefixes {
+            guard let plan = try? await store.classificationPlan(ids: ids, prefix: prefix), plan.photos > 0 else { continue }
+            needed.append(prefix)
+            photos = max(photos, plan.photos)
+            let perPhoto = await store.setting(Self.secondsKey(prefix)).flatMap(Double.init) ?? Self.defaultSeconds(prefix)
+            seconds += Double(plan.photos) * perPhoto
+        }
+        guard photos > 0 else {
             if !quietlyIfNone { status = ids == nil ? "Every photo is tagged" : "Nothing to re-tag" }
             return
         }
-        guard plan.photos > Self.askAbove else {
-            startTagging(ids: ids)
+        guard photos > Self.askAbove else {
+            startTagging(ids: ids, prefixes: needed)
             return
         }
-        let perPhoto = await store.setting("tagging.secondsPerPhoto").flatMap(Double.init) ?? Self.defaultSecondsPerPhoto
-        taggingQuestion = Self.question(ids: ids, plan: plan, secondsPerPhoto: perPhoto)
+        taggingQuestion = Self.question(ids: ids, plan: Store.ClassifyPlan(photos: photos),
+                                        secondsPerPhoto: seconds / Double(photos),
+                                        prefixes: needed)
     }
 
     func answerTagging(_ question: TaggingQuestion, tag: Bool) {
         taggingQuestion = nil
         if tag {
-            startTagging(ids: question.ids)
+            startTagging(ids: question.ids, prefixes: question.prefixes)
         } else if question.ids == nil {
             taggingDeclined = true
         }
     }
 
-    static func question(ids: [Int64]?, plan: Store.ClassifyPlan, secondsPerPhoto: Double) -> TaggingQuestion {
+    /// "JoyTag", "SigLIP 2", or "JoyTag and SigLIP 2".
+    static func names(_ prefixes: [String]) -> String {
+        prefixes.map(OwnTaggers.tool).joined(separator: " and ")
+    }
+
+    static func question(ids: [Int64]?, plan: Store.ClassifyPlan, secondsPerPhoto: Double,
+                         prefixes: [String] = [JoyTag.prefix]) -> TaggingQuestion {
         let n = NumberFormatter.localizedString(from: NSNumber(value: plan.photos), number: .decimal)
+        let who = names(prefixes)
+        let one = prefixes.count == 1
         var message = ids == nil
-            ? "JoyTag looks at each photo and names what it sees. Its tags are kept in PhotoVault's catalog; "
-                + "the photos themselves aren't changed."
-            : "Their JoyTag tags are replaced. The photos themselves aren't changed."
+            ? "\(who) \(one ? "looks" : "look") at each photo and \(one ? "names what it sees" : "name what they see"). "
+                + "\(one ? "Its" : "Their") tags are kept in PhotoVault's catalog; the photos themselves aren't changed."
+            : "Their \(who) tags are replaced. The photos themselves aren't changed."
         message += " It takes \(roughly(Double(plan.photos) * secondsPerPhoto))."
         message += ids == nil
             ? " You can stop at any time; it carries on the next time PhotoVault opens."
             : " You can stop at any time; photos already re-tagged keep their new tags."
-        return TaggingQuestion(ids: ids,
-                               title: ids == nil ? "Tag \(n) photos with JoyTag?" : "Re-tag \(n) photos with JoyTag?",
+        return TaggingQuestion(ids: ids, prefixes: prefixes,
+                               title: ids == nil ? "Tag \(n) photos with \(who)?" : "Re-tag \(n) photos with \(who)?",
                                message: message,
                                action: ids == nil ? "Tag Photos" : "Re-tag Photos")
     }
@@ -1751,32 +2005,44 @@ final class LibraryModel: ObservableObject {
         return hours < 10 ? String(format: "about %.1f hours", hours) : String(format: "about %.0f hours", hours)
     }
 
-    /// Runs JoyTag as a scan runs: in the background, with Stop, and the quit
-    /// question while it works. The model is loaded for the run and released
-    /// after it (it takes about 400 MB of memory).
-    func startTagging(ids: [Int64]?) {
-        guard let store, let files = joyTagFiles, scanTask == nil else { return }
+    /// Runs the taggers one after another as a scan runs: in the background,
+    /// with Stop, and the quit question while it works. Each model is loaded
+    /// for its part of the run and released after it (about 400 MB of memory
+    /// each). SigLIP 2 first gets this vault's calibration (see
+    /// `SigLIPCalibration`), made once from a sample of its photos.
+    func startTagging(ids: [Int64]?, prefixes: [String] = [JoyTag.prefix]) {
+        let prefixes = prefixes.filter(installedTaggers.contains)
+        guard let store, !prefixes.isEmpty, scanTask == nil else { return }
         guard #available(macOS 15.0, *) else { return }
+        let joyTag = joyTagFiles, siglip = siglipFiles
         scanning = true
         job = ids == nil ? .tagging : .retagging
         scanProgress = nil
-        status = "Loading JoyTag…"
+        status = "Loading \(OwnTaggers.tool(prefixes[0]))…"
         activity.fast = false
         let pace = activity.pace
         let sink = progressSink()
         scanTask = Task { [weak self] in
             var stopped = false
-            var result: Store.ClassifyResult?
+            var results: [(String, Store.ClassifyResult)] = []
             do {
-                var classifier: TagClassifier = try await Task.detached(priority: .utility) {
-                    try JoyTagClassifier(files: files)
-                }.value
-                // Test-only: the smoke test slows tagging so it can stop a run part-way.
-                if ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_SLOW_TAGGING"] == "1" {
-                    classifier = SlowedClassifier(base: classifier, nanoseconds: 700_000_000)
+                for prefix in prefixes {
+                    self?.status = "Loading \(OwnTaggers.tool(prefix))…"
+                    var classifier: TagClassifier
+                    if prefix == SigLIP.prefix, let siglip {
+                        let s = try await Task.detached(priority: .utility) { try SigLIPClassifier(files: siglip) }.value
+                        try await store.calibrate(s, progress: sink)
+                        classifier = s
+                    } else if let joyTag {
+                        classifier = try await Task.detached(priority: .utility) { try JoyTagClassifier(files: joyTag) }.value
+                    } else { continue }
+                    // Test-only: the smoke test slows tagging so it can stop a run part-way.
+                    if ProcessInfo.processInfo.environment["PHOTOVAULT_SMOKE_SLOW_TAGGING"] == "1" {
+                        classifier = SlowedClassifier(base: classifier, nanoseconds: 700_000_000)
+                    }
+                    try Task.checkCancellation()
+                    results.append((prefix, try await store.classify(ids: ids, with: classifier, pace: pace, progress: sink)))
                 }
-                try Task.checkCancellation()
-                result = try await store.classify(ids: ids, with: classifier, pace: pace, progress: sink)
             } catch is CancellationError {
                 stopped = true
             } catch {
@@ -1791,13 +2057,13 @@ final class LibraryModel: ObservableObject {
             await self.reload()
             if stopped {
                 self.status = ids == nil ? "Tagging stopped — it carries on next time PhotoVault opens" : "Re-tagging stopped"
-            } else if let result {
-                await self.report(result, retag: ids != nil)
+            } else if !results.isEmpty {
+                await self.report(results, retag: ids != nil)
             }
         }
     }
 
-    /// For `Scripts/smoke-test.sh` only: JoyTag with a pause before each photo.
+    /// For `Scripts/smoke-test.sh` only: a tagger with a pause before each photo.
     private struct SlowedClassifier: TagClassifier {
         let base: TagClassifier
         let nanoseconds: UInt64
@@ -1809,17 +2075,22 @@ final class LibraryModel: ObservableObject {
         }
     }
 
-    private func report(_ result: Store.ClassifyResult, retag: Bool) async {
-        let n = result.photos
-        status = "\(retag ? "Re-tagged" : "Tagged") \(n) \(n == 1 ? "photo" : "photos") with JoyTag"
-        if !result.failures.isEmpty {
-            errorMessage = "\(result.failures.count) photo(s) couldn't be tagged:\n" + result.failures.prefix(5).joined(separator: "\n")
+    private func report(_ results: [(String, Store.ClassifyResult)], retag: Bool) async {
+        let n = results.map(\.1.photos).max() ?? 0
+        let who = Self.names(results.filter { $0.1.photos > 0 }.map(\.0))
+        status = "\(retag ? "Re-tagged" : "Tagged") \(n) \(n == 1 ? "photo" : "photos")" + (who.isEmpty ? "" : " with \(who)")
+        let failures = results.flatMap(\.1.failures)
+        if !failures.isEmpty {
+            errorMessage = "\(failures.count) photo(s) couldn't be tagged:\n" + failures.prefix(5).joined(separator: "\n")
         }
         // A run long enough to be a fair measure sets the next estimate.
-        if n >= 20, let store {
-            await store.setSetting("tagging.secondsPerPhoto", String(format: "%.3f", result.seconds / Double(n)))
+        for (prefix, result) in results where result.photos >= 20 {
+            await store?.setSetting(Self.secondsKey(prefix), String(format: "%.3f", result.seconds / Double(result.photos)))
         }
-        print("smoke: tagged \(n), failures \(result.failures.count)")
+        for (prefix, result) in results {
+            print("smoke: tagged \(result.photos) with \(prefix), failures \(result.failures.count)")
+        }
+        print("smoke: tagged \(n), failures \(failures.count)")
         fflush(stdout)
     }
 
@@ -2822,7 +3093,7 @@ final class LibraryModel: ObservableObject {
     /// Space: start or pause. While typing, Space is a space.
     func autoScrollCommand() {
         if isEditingText { return typeIntoText(" ") }
-        guard viewing == nil, !items.isEmpty else { return }
+        guard viewing == nil, !showingMap, !items.isEmpty else { return }
         autoScrolling.toggle()
     }
 
